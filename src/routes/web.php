@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\UserController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\PasswordResetController;
-use App\Http\Controllers\HomeController;
 use App\Http\Controllers\HouseholdController;
 
 /*
@@ -44,14 +43,36 @@ Route::post('/logout', [UserController::class, 'logout'])->name('logout')->middl
 
 // 認証が必要なルート
 Route::middleware(['auth'])->group(function () {
-    Route::get('/home', [HomeController::class, 'index'])->name('home');
+    // ホーム画面（入力画面にリダイレクト）
+    Route::get('/home', function () {
+        return redirect()->route('household.input');
+    })->name('home');
     
     // 家計簿機能
     Route::prefix('household')->name('household.')->group(function () {
+        // 入力画面
         Route::get('/input', [HouseholdController::class, 'input'])->name('input');
+        Route::post('/input', [HouseholdController::class, 'store'])->name('store');
+        
+        // 月データ
         Route::get('/monthly', [HouseholdController::class, 'monthly'])->name('monthly');
+        
+        // 年データ
         Route::get('/yearly', [HouseholdController::class, 'yearly'])->name('yearly');
+        
+        // 設定
         Route::get('/settings', [HouseholdController::class, 'settings'])->name('settings');
+        
+        // その他の機能（後で実装）
+        Route::prefix('api')->name('api.')->group(function () {
+            // 収支データの編集・削除
+            Route::put('/oeconomica/{id}', [HouseholdController::class, 'update'])->name('oeconomica.update');
+            Route::delete('/oeconomica/{id}', [HouseholdController::class, 'destroy'])->name('oeconomica.destroy');
+            
+            // CSV関連
+            Route::post('/import', [HouseholdController::class, 'import'])->name('import');
+            Route::get('/export', [HouseholdController::class, 'export'])->name('export');
+        });
     });
 });
 ?>
