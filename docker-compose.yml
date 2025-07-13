@@ -22,7 +22,7 @@ services:
       context: ./docker/php
       args:
         - PHP_VERSION=${PHP_VERSION}
-    container_name: devdevOeconomica_app
+    container_name: devOeconomica_app
     volumes:
       - ./src:/var/www/html
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
@@ -39,7 +39,7 @@ services:
       context: ./docker/mysql
       args:
         - MYSQL_VERSION=${MYSQL_VERSION}
-    container_name: devdevOeconomica_db
+    container_name: devOeconomica_db
     environment:
       - MYSQL_DATABASE=${DB_DATABASE}
       - MYSQL_USER=${DB_USERNAME}
@@ -58,7 +58,7 @@ services:
   # phpMyAdmin
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
-    container_name: devdevOeconomica_phpmyadmin
+    container_name: devOeconomica_phpmyadmin
     ports:
       - "18080:80"
     environment:
