@@ -85,8 +85,12 @@
                 収支登録
             </h2>
             
-            <form method="POST" action="{{ route('household.store') }}" class="input-form">
+            <form method="POST" action="{{ route('household.store') }}" class="input-form" id="householdForm">
                 @csrf
+                
+                <!-- 年月の情報を隠しフィールドで送信 -->
+                <input type="hidden" name="year" value="{{ $currentYear }}">
+                <input type="hidden" name="month" value="{{ $currentMonth }}">
                 
                 <div class="form-row">
                     <!-- 収支区分 -->
@@ -113,7 +117,7 @@
                                id="date" 
                                name="date" 
                                class="form-input"
-                               value="{{ old('date', $startDate->format('Y-m-d')) }}"
+                               value="{{ old('date', Carbon\Carbon::now()->format('Y-m-d')) }}"
                                min="{{ $startDate->format('Y-m-d') }}"
                                max="{{ $endDate->format('Y-m-d') }}"
                                required>
@@ -124,35 +128,19 @@
                     <!-- カテゴリ -->
                     <div class="form-group">
                         <label for="category" class="form-label">カテゴリ</label>
-                        <select id="category" name="category" class="form-select" required>
-                            <option value="">カテゴリを選択</option>
-                            <optgroup label="収入" id="income-categories" style="display: none;">
-                                @foreach($incomeCategories as $category)
-                                    <option value="{{ $category->category }}" {{ old('category') == $category->category ? 'selected' : '' }}>
-                                        {{ $category->category }}
-                                    </option>
-                                @endforeach
-                            </optgroup>
-                            <optgroup label="支出" id="expense-categories" style="display: none;">
-                                @foreach($expenseCategories as $category)
-                                    <option value="{{ $category->category }}" {{ old('category') == $category->category ? 'selected' : '' }}>
-                                        {{ $category->category }}
-                                    </option>
-                                @endforeach
-                            </optgroup>
+                        <select id="category" name="category" class="form-select" required disabled>
+                            <option value="">先に収支区分を選択してください</option>
                         </select>
                     </div>
                     
                     <!-- 金額 -->
                     <div class="form-group">
                         <label for="amount" class="form-label">金額（円）</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="amount" 
                                name="amount" 
                                class="form-input"
                                value="{{ old('amount') }}"
-                               min="1"
-                               step="1"
                                placeholder="0"
                                required>
                     </div>
@@ -206,6 +194,27 @@
             </h2>
             
             @if($oeconomicas->count() > 0)
+                <!-- 合計表示 -->
+                <div class="summary-row">
+                    @php
+                        $totalIncome = $oeconomicas->where('balance', 'income')->sum('amount');
+                        $totalExpense = $oeconomicas->where('balance', 'expense')->sum('amount');
+                        $balance = $totalIncome - $totalExpense;
+                    @endphp
+                    <div class="summary-item income">
+                        <span class="summary-label">収入合計</span>
+                        <span class="summary-amount">+{{ number_format($totalIncome) }}円</span>
+                    </div>
+                    <div class="summary-item expense">
+                        <span class="summary-label">支出合計</span>
+                        <span class="summary-amount">-{{ number_format($totalExpense) }}円</span>
+                    </div>
+                    <div class="summary-item balance {{ $balance >= 0 ? 'positive' : 'negative' }}">
+                        <span class="summary-label">収支</span>
+                        <span class="summary-amount">{{ $balance >= 0 ? '+' : '' }}{{ number_format($balance) }}円</span>
+                    </div>
+                </div>
+                
                 <div class="table-container">
                     <table class="oeconomica-table">
                         <thead>
@@ -233,10 +242,22 @@
                                     </td>
                                     <td>{{ $item->memo ?: '-' }}</td>
                                     <td>
-                                        <button class="action-btn edit-btn" title="編集">
+                                        <button class="action-btn edit-btn" 
+                                                title="編集" 
+                                                data-id="{{ $item->id }}"
+                                                data-balance="{{ $item->balance }}"
+                                                data-date="{{ $item->date->format('Y-m-d') }}"
+                                                data-category="{{ $item->category }}"
+                                                data-amount="{{ $item->amount }}"
+                                                data-memo="{{ $item->memo }}">
                                             <span>✏️</span>
                                         </button>
-                                        <button class="action-btn delete-btn" title="削除">
+                                        <button class="action-btn delete-btn" 
+                                                title="削除"
+                                                data-id="{{ $item->id }}"
+                                                data-category="{{ $item->category }}"
+                                                data-amount="{{ $item->amount }}"
+                                                data-balance="{{ $item->balance }}">
                                             <span>🗑️</span>
                                         </button>
                                     </td>
@@ -253,6 +274,92 @@
                 </div>
             @endif
         </div>
+    </div>
+</div>
+
+<!-- 編集モーダル -->
+<div id="editModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="modal-icon">✏️</span>
+                収支データ編集
+            </h3>
+            <button class="modal-close" type="button">&times;</button>
+        </div>
+        
+        <form id="editForm" class="modal-form">
+            <input type="hidden" id="edit-id" name="id">
+            
+            <div class="form-row">
+                <!-- 収支区分 -->
+                <div class="form-group">
+                    <label class="form-label">収支区分</label>
+                    <div class="radio-group">
+                        <label class="radio-option income">
+                            <input type="radio" id="edit-balance-income" name="edit_balance" value="income" required>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">収入</span>
+                        </label>
+                        <label class="radio-option expense">
+                            <input type="radio" id="edit-balance-expense" name="edit_balance" value="expense" required>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">支出</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 日付 -->
+                <div class="form-group">
+                    <label for="edit-date" class="form-label">日付</label>
+                    <input type="date" 
+                           id="edit-date" 
+                           name="edit_date" 
+                           class="form-input"
+                           required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <!-- カテゴリ -->
+                <div class="form-group">
+                    <label for="edit-category" class="form-label">カテゴリ</label>
+                    <select id="edit-category" name="edit_category" class="form-select" required>
+                        <option value="">カテゴリを選択してください</option>
+                    </select>
+                </div>
+                
+                <!-- 金額 -->
+                <div class="form-group">
+                    <label for="edit-amount" class="form-label">金額（円）</label>
+                    <input type="text" 
+                           id="edit-amount" 
+                           name="edit_amount" 
+                           class="form-input"
+                           placeholder="0"
+                           required>
+                </div>
+            </div>
+            
+            <!-- メモ -->
+            <div class="form-group full-width">
+                <label for="edit-memo" class="form-label">メモ</label>
+                <input type="text" 
+                       id="edit-memo" 
+                       name="edit_memo" 
+                       class="form-input"
+                       placeholder="具体的な購入品などを入力"
+                       maxlength="255">
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn">キャンセル</button>
+                <button type="submit" class="update-btn">
+                    <span class="btn-icon">💾</span>
+                    更新
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -472,6 +579,13 @@
         border-color: #667eea;
     }
 
+    .form-select:disabled {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
     /* ラジオボタン */
     .radio-group {
         display: flex;
@@ -593,6 +707,54 @@
         background: #667eea;
         color: white;
         transform: translateY(-2px);
+    }
+
+    /* サマリー */
+    .summary-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 20px;
+        padding: 20px 30px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .summary-item {
+        text-align: center;
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .summary-label {
+        display: block;
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+
+    .summary-amount {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .summary-item.income .summary-amount {
+        color: #28a745;
+    }
+
+    .summary-item.expense .summary-amount {
+        color: #dc3545;
+    }
+
+    .summary-item.balance.positive .summary-amount {
+        color: #28a745;
+    }
+
+    .summary-item.balance.negative .summary-amount {
+        color: #dc3545;
     }
 
     /* テーブル */
@@ -726,6 +888,11 @@
             flex-direction: column;
         }
 
+        .summary-row {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
         .table-container {
             padding: 0 15px;
         }
@@ -738,86 +905,522 @@
         .oeconomica-table td {
             padding: 8px 10px;
         }
+
+        .modal-content {
+            margin: 10% auto;
+            width: 95%;
+        }
+    }
+
+    /* モーダル */
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 0;
+        border-radius: 15px;
+        width: 80%;
+        max-width: 600px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        animation: modalShow 0.3s ease-out;
+    }
+
+    @keyframes modalShow {
+        from {
+            opacity: 0;
+            transform: translateY(-50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .modal-header {
+        padding: 20px 30px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-title {
+        font-size: 20px;
+        color: #333;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 500;
+    }
+
+    .modal-icon {
+        font-size: 24px;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 28px;
+        cursor: pointer;
+        color: #999;
+        line-height: 1;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+    }
+
+    .modal-close:hover {
+        color: #333;
+        background: #f8f9fa;
+    }
+
+    .modal-form {
+        padding: 20px 30px 30px;
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 15px;
+        justify-content: flex-end;
+        margin-top: 30px;
+    }
+
+    .cancel-btn {
+        padding: 12px 24px;
+        border: 2px solid #dc3545;
+        background: white;
+        color: #dc3545;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 16px;
+    }
+
+    .cancel-btn:hover {
+        background: #dc3545;
+        color: white;
+    }
+
+    .update-btn {
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+
+    .update-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
     }
 </style>
 
+<!-- カテゴリデータをJavaScriptで利用できるように埋め込み -->
 <script>
-    // 収支区分に応じてカテゴリ表示を切り替え
-    document.querySelectorAll('input[name="balance"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const incomeCategories = document.getElementById('income-categories');
-            const expenseCategories = document.getElementById('expense-categories');
-            const categorySelect = document.getElementById('category');
+    // サーバーから渡されたカテゴリデータ
+    const incomeCategories = @json($incomeCategories->pluck('category'));
+    const expenseCategories = @json($expenseCategories->pluck('category'));
+    
+    console.log('収入カテゴリ:', incomeCategories);
+    console.log('支出カテゴリ:', expenseCategories);
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const balanceRadios = document.querySelectorAll('input[name="balance"]');
+        const categorySelect = document.getElementById('category');
+        
+        // 収支区分変更時のイベント
+        balanceRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                updateCategoryOptions(this.value);
+            });
+        });
+        
+        // カテゴリオプションを更新する関数
+        function updateCategoryOptions(balanceType) {
+            console.log('カテゴリ更新:', balanceType);
             
-            // カテゴリ選択をリセット
-            categorySelect.value = '';
+            // カテゴリ選択をクリア
+            categorySelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
             
-            if (this.value === 'income') {
-                incomeCategories.style.display = 'block';
-                expenseCategories.style.display = 'none';
-            } else if (this.value === 'expense') {
-                incomeCategories.style.display = 'none';
-                expenseCategories.style.display = 'block';
+            // 選択された収支区分に応じてカテゴリを設定
+            let categories = [];
+            if (balanceType === 'income') {
+                categories = incomeCategories;
+            } else if (balanceType === 'expense') {
+                categories = expenseCategories;
+            }
+            
+            console.log('利用可能なカテゴリ:', categories);
+            
+            // カテゴリオプションを追加
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                
+                // old値がある場合は選択状態にする
+                if (category === '{{ old("category") }}') {
+                    option.selected = true;
+                }
+                
+                categorySelect.appendChild(option);
+            });
+            
+            // カテゴリ選択を有効化
+            categorySelect.disabled = false;
+        }
+        
+        // ページ読み込み時に選択済みの収支区分があれば処理
+        const checkedBalance = document.querySelector('input[name="balance"]:checked');
+        if (checkedBalance) {
+            updateCategoryOptions(checkedBalance.value);
+        }
+        
+        // 金額入力時の数値フォーマット処理
+        const amountInput = document.getElementById('amount');
+        
+        amountInput.addEventListener('input', function() {
+            let value = this.value.replace(/[^\d]/g, '');
+            if (value) {
+                this.value = parseInt(value).toLocaleString();
+            }
+        });
+        
+        amountInput.addEventListener('focus', function() {
+            this.value = this.value.replace(/,/g, '');
+        });
+        
+        amountInput.addEventListener('blur', function() {
+            if (this.value) {
+                const numericValue = this.value.replace(/,/g, '');
+                if (!isNaN(numericValue) && numericValue !== '') {
+                    this.value = parseInt(numericValue).toLocaleString();
+                }
+            }
+        });
+        
+        // フォーム送信時の処理
+        document.getElementById('householdForm').addEventListener('submit', function(e) {
+            // 金額からカンマを除去
+            const rawValue = amountInput.value.replace(/,/g, '');
+            amountInput.value = rawValue;
+            
+            // バリデーション
+            if (!rawValue || isNaN(rawValue) || parseInt(rawValue) < 1) {
+                e.preventDefault();
+                alert('正しい金額を入力してください。');
+                amountInput.focus();
+                return;
+            }
+            
+            if (!categorySelect.value) {
+                e.preventDefault();
+                alert('カテゴリを選択してください。');
+                categorySelect.focus();
+                return;
             }
         });
     });
 
-    // ページ読み込み時に選択された収支区分に応じてカテゴリを表示
-    document.addEventListener('DOMContentLoaded', function() {
-        const selectedBalance = document.querySelector('input[name="balance"]:checked');
-        if (selectedBalance) {
-            selectedBalance.dispatchEvent(new Event('change'));
+    // CSV操作ボタンの実装（後で実装）
+    document.querySelector('.import-btn')?.addEventListener('click', function() {
+        alert('CSVインポート機能は後で実装予定です');
+    });
+
+    document.querySelector('.export-btn')?.addEventListener('click', function() {
+        alert('CSVエクスポート機能は後で実装予定です');
+    });
+
+    // 編集・削除ボタンの実装
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            openEditModal(this);
+        });
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            deleteOeconomica(this);
+        });
+    });
+
+    // 編集モーダルを開く
+    function openEditModal(button) {
+        const modal = document.getElementById('editModal');
+        const form = document.getElementById('editForm');
+        
+        // データを取得
+        const id = button.getAttribute('data-id');
+        const balance = button.getAttribute('data-balance');
+        const date = button.getAttribute('data-date');
+        const category = button.getAttribute('data-category');
+        const amount = button.getAttribute('data-amount');
+        const memo = button.getAttribute('data-memo');
+        
+        // フォームにデータを設定
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-date').value = date;
+        document.getElementById('edit-memo').value = memo || '';
+        
+        // 収支区分を設定
+        if (balance === 'income') {
+            document.getElementById('edit-balance-income').checked = true;
+        } else {
+            document.getElementById('edit-balance-expense').checked = true;
+        }
+        
+        // カテゴリを更新
+        updateEditCategories(balance, category);
+        
+        // 金額を設定（カンマ付きで表示）
+        document.getElementById('edit-amount').value = parseInt(amount).toLocaleString();
+        
+        // モーダルを表示
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    // 編集用カテゴリ更新
+    function updateEditCategories(balanceType, selectedCategory = '') {
+        const categorySelect = document.getElementById('edit-category');
+        
+        // カテゴリ選択をクリア
+        categorySelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+        
+        // 選択された収支区分に応じてカテゴリを設定
+        let categories = [];
+        if (balanceType === 'income') {
+            categories = incomeCategories;
+        } else if (balanceType === 'expense') {
+            categories = expenseCategories;
+        }
+        
+        // カテゴリオプションを追加
+        categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = category;
+            
+            if (category === selectedCategory) {
+                option.selected = true;
+            }
+            
+            categorySelect.appendChild(option);
+        });
+    }
+
+    // 編集フォームの収支区分変更イベント
+    document.querySelectorAll('input[name="edit_balance"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            updateEditCategories(this.value);
+        });
+    });
+
+    // モーダルを閉じる
+    function closeEditModal() {
+        const modal = document.getElementById('editModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    // モーダル関連イベント
+    document.querySelector('.modal-close').addEventListener('click', closeEditModal);
+    document.querySelector('.cancel-btn').addEventListener('click', closeEditModal);
+    
+    // モーダル外クリックで閉じる
+    document.getElementById('editModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeEditModal();
         }
     });
 
-    // 金額入力時の数値フォーマット
-    document.getElementById('amount').addEventListener('input', function() {
+    // 編集フォーム送信
+    document.getElementById('editForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('edit-id').value;
+        const balance = document.querySelector('input[name="edit_balance"]:checked').value;
+        const date = document.getElementById('edit-date').value;
+        const category = document.getElementById('edit-category').value;
+        const amount = document.getElementById('edit-amount').value.replace(/,/g, '');
+        const memo = document.getElementById('edit-memo').value;
+        
+        // バリデーション
+        if (!balance || !date || !category || !amount) {
+            alert('必須項目を入力してください。');
+            return;
+        }
+        
+        if (isNaN(amount) || parseInt(amount) < 1) {
+            alert('正しい金額を入力してください。');
+            return;
+        }
+        
+        // 更新処理
+        updateOeconomica(id, {
+            balance: balance,
+            date: date,
+            category: category,
+            amount: parseInt(amount),
+            memo: memo
+        });
+    });
+
+    // データ更新
+    function updateOeconomica(id, data) {
+        const updateBtn = document.querySelector('.update-btn');
+        const originalText = updateBtn.innerHTML;
+        updateBtn.innerHTML = '<span class="btn-icon">⏳</span>更新中...';
+        updateBtn.disabled = true;
+        
+        // CSRFトークンを取得
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            alert('セキュリティトークンが見つかりません。ページを再読み込みしてください。');
+            updateBtn.innerHTML = originalText;
+            updateBtn.disabled = false;
+            return;
+        }
+        
+        fetch(`/household/update/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (!response.ok) {
+                // HTTPエラーの場合、レスポンステキストを取得
+                return response.text().then(text => {
+                    console.error('Server response:', text);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                });
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.success) {
+                alert(result.message);
+                closeEditModal();
+                location.reload(); // ページを再読み込みして最新データを表示
+            } else {
+                alert(result.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Update error:', error);
+            alert('通信エラーが発生しました: ' + error.message);
+        })
+        .finally(() => {
+            updateBtn.innerHTML = originalText;
+            updateBtn.disabled = false;
+        });
+    }
+
+    // データ削除
+    function deleteOeconomica(button) {
+        const id = button.getAttribute('data-id');
+        const category = button.getAttribute('data-category');
+        const amount = button.getAttribute('data-amount');
+        const balance = button.getAttribute('data-balance');
+        const balanceText = balance === 'income' ? '収入' : '支出';
+        
+        const message = `以下のデータを削除しますか？\n\n${balanceText}: ${category}\n金額: ${parseInt(amount).toLocaleString()}円`;
+        
+        if (!confirm(message)) {
+            return;
+        }
+        
+        // CSRFトークンを取得
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            alert('セキュリティトークンが見つかりません。ページを再読み込みしてください。');
+            return;
+        }
+        
+        fetch(`/household/delete/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                // HTTPエラーの場合、レスポンステキストを取得
+                return response.text().then(text => {
+                    console.error('Server response:', text);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                });
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.success) {
+                alert(result.message);
+                location.reload(); // ページを再読み込みして最新データを表示
+            } else {
+                alert(result.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Delete error:', error);
+            alert('通信エラーが発生しました: ' + error.message);
+        });
+    }
+
+    // 編集モーダルの金額入力処理
+    document.getElementById('edit-amount').addEventListener('input', function() {
         let value = this.value.replace(/[^\d]/g, '');
         if (value) {
             this.value = parseInt(value).toLocaleString();
         }
     });
 
-    // 金額フィールドにフォーカスが当たったときにカンマを除去
-    document.getElementById('amount').addEventListener('focus', function() {
+    document.getElementById('edit-amount').addEventListener('focus', function() {
         this.value = this.value.replace(/,/g, '');
     });
 
-    // 金額フィールドからフォーカスが外れたときにカンマを追加
-    document.getElementById('amount').addEventListener('blur', function() {
+    document.getElementById('edit-amount').addEventListener('blur', function() {
         if (this.value) {
-            this.value = parseInt(this.value.replace(/,/g, '')).toLocaleString();
+            const numericValue = this.value.replace(/,/g, '');
+            if (!isNaN(numericValue) && numericValue !== '') {
+                this.value = parseInt(numericValue).toLocaleString();
+            }
         }
     });
-
-    // フォーム送信時にカンマを除去
-    document.querySelector('.input-form').addEventListener('submit', function() {
-        const amountField = document.getElementById('amount');
-        amountField.value = amountField.value.replace(/,/g, '');
-    });
-
-    // CSV操作ボタンの実装（後で実装）
-    document.querySelector('.import-btn').addEventListener('click', function() {
-        alert('CSVインポート機能は後で実装予定です');
-    });
-
-    document.querySelector('.export-btn').addEventListener('click', function() {
-        alert('CSVエクスポート機能は後で実装予定です');
-    });
-
-    // 編集・削除ボタンの実装（後で実装）
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            alert('編集機能は後で実装予定です');
-        });
-    });
-
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (confirm('この収支データを削除しますか？')) {
-                alert('削除機能は後で実装予定です');
-            }
-        });
-    });
+// }
 </script>
 @endsection

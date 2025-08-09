@@ -53,7 +53,13 @@ Route::middleware(['auth'])->group(function () {
         // 入力画面
         Route::get('/input', [HouseholdController::class, 'input'])->name('input');
         Route::post('/input', [HouseholdController::class, 'store'])->name('store');
-        
+        // Route::get('/categories', [HouseholdController::class, 'getCategories'])->name('household.categories');
+   
+        // 入力画面データ編集
+        Route::get('/edit/{id}', [HouseholdController::class, 'edit'])->name('household.edit');
+        Route::put('/update/{id}', [HouseholdController::class, 'update'])->name('household.update');
+        Route::delete('/delete/{id}', [HouseholdController::class, 'destroy'])->name('household.destroy');
+    
         // 月データ
         Route::get('/monthly', [HouseholdController::class, 'monthly'])->name('monthly');
         
