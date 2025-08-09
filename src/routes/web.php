@@ -59,7 +59,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/edit/{id}', [HouseholdController::class, 'edit'])->name('household.edit');
         Route::put('/update/{id}', [HouseholdController::class, 'update'])->name('household.update');
         Route::delete('/delete/{id}', [HouseholdController::class, 'destroy'])->name('household.destroy');
-    
+
+        // CSV機能ルート（以下を追加）
+        Route::get('/export-csv', [HouseholdController::class, 'exportCsv'])->name('export');
+        Route::get('/import', [HouseholdController::class, 'importForm'])->name('import');
+        Route::post('/import', [HouseholdController::class, 'importCsv'])->name('import.store');
+        
         // 月データ
         Route::get('/monthly', [HouseholdController::class, 'monthly'])->name('monthly');
         
@@ -68,17 +73,6 @@ Route::middleware(['auth'])->group(function () {
         
         // 設定
         Route::get('/settings', [HouseholdController::class, 'settings'])->name('settings');
-        
-        // その他の機能（後で実装）
-        Route::prefix('api')->name('api.')->group(function () {
-            // 収支データの編集・削除
-            Route::put('/oeconomica/{id}', [HouseholdController::class, 'update'])->name('oeconomica.update');
-            Route::delete('/oeconomica/{id}', [HouseholdController::class, 'destroy'])->name('oeconomica.destroy');
-            
-            // CSV関連
-            Route::post('/import', [HouseholdController::class, 'import'])->name('import');
-            Route::get('/export', [HouseholdController::class, 'export'])->name('export');
-        });
     });
 });
 ?>

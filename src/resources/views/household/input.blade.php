@@ -1148,13 +1148,21 @@
         });
     });
 
-    // CSV操作ボタンの実装（後で実装）
+    // CSV操作ボタンの実装
     document.querySelector('.import-btn')?.addEventListener('click', function() {
-        alert('CSVインポート機能は後で実装予定です');
+        window.location.href = '/household/import';
     });
 
     document.querySelector('.export-btn')?.addEventListener('click', function() {
-        alert('CSVエクスポート機能は後で実装予定です');
+        // 現在の年月を取得
+        const currentYear = {{ $currentYear }};
+        const currentMonth = {{ $currentMonth }};
+        
+        // エクスポートURLを構築
+        const exportUrl = `/household/export-csv?year=${currentYear}&month=${currentMonth}`;
+        
+        // ダウンロード実行
+        window.location.href = exportUrl;
     });
 
     // 編集・削除ボタンの実装
@@ -1421,6 +1429,6 @@
             }
         }
     });
-// }
+
 </script>
 @endsection

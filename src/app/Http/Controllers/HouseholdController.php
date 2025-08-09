@@ -38,12 +38,12 @@ class HouseholdController extends Controller
         // ユーザーのカテゴリを取得
         $incomeCategories = Category::where('user_id', $user->id)
             ->where('type', 'income')
-            ->orderBy('id')
+            ->orderBy('category')
             ->get();
             
         $expenseCategories = Category::where('user_id', $user->id)
             ->where('type', 'expense')
-            ->orderBy('id')
+            ->orderBy('category')
             ->get();
 
         // 指定月の収支データを取得
@@ -153,29 +153,28 @@ class HouseholdController extends Controller
         }
     }
 
-    // 未使用のためコメントアウト（2025/7/26）
-    // /**
-    //  * Ajax でカテゴリを取得
-    //  *
-    //  * @param  \Illuminate\Http\Request  $request
-    //  * @return \Illuminate\Http\JsonResponse
-    //  */
-    // public function getCategories(Request $request)
-    // {
-    //     $user = Auth::user();
-    //     $balance = $request->get('balance');
+    /**
+     * Ajax でカテゴリを取得
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCategories(Request $request)
+    {
+        $user = Auth::user();
+        $balance = $request->get('balance');
 
-    //     if (!in_array($balance, ['income', 'expense'])) {
-    //         return response()->json(['error' => 'Invalid balance type'], 400);
-    //     }
+        if (!in_array($balance, ['income', 'expense'])) {
+            return response()->json(['error' => 'Invalid balance type'], 400);
+        }
 
-    //     $categories = Category::where('user_id', $user->id)
-    //         ->where('type', $balance)
-    //         ->orderBy('id')
-    //         ->pluck('category', 'category');
+        $categories = Category::where('user_id', $user->id)
+            ->where('type', $balance)
+            ->orderBy('category')
+            ->pluck('category', 'category');
 
-    //     return response()->json($categories);
-    // }
+        return response()->json($categories);
+    }
 
     /**
      * Show monthly data.
@@ -356,7 +355,12 @@ class HouseholdController extends Controller
                 ->with('success', $message);
 
         } catch (\Exception $e) {
-            \Log::error('Update error: ' . $e->getMessage());
+            \Log::error('Update error: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'oeconomica_id' => $id,
+                'data' => $validatedData,
+                'trace' => $e->getTraceAsString()
+            ]);
             
             if ($request->expectsJson()) {
                 return response()->json(['error' => 'データの更新に失敗しました: ' . $e->getMessage()], 500);
@@ -417,6 +421,245 @@ class HouseholdController extends Controller
                 return response()->json(['error' => 'データの削除に失敗しました'], 500);
             }
             return back()->withErrors(['general' => 'データの削除に失敗しました。']);
+        }
+    }
+
+    /**
+     * Export oeconomica data to CSV.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function exportCsv(Request $request)
+    {
+        $user = Auth::user();
+        
+        // 年月の指定（デフォルトは現在の年月）
+        $year = $request->get('year', Carbon::now()->year);
+        $month = $request->get('month', Carbon::now()->month);
+        
+        // 指定月のデータを取得
+        $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+        $endDate = Carbon::create($year, $month, 1)->endOfMonth();
+        
+        $oeconomicas = Oeconomica::where('user_id', $user->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        // CSVファイル名
+        $filename = "家計簿データ_{$year}年{$month}月_" . date('YmdHis') . '.csv';
+        
+        // CSVヘッダー
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        // レスポンスのコールバック
+        $callback = function() use ($oeconomicas) {
+            $file = fopen('php://output', 'w');
+            
+            // BOM付きUTF-8でエクスポート（Excel対応）
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            // CSVヘッダー行
+            fputcsv($file, [
+                '日付',
+                '収支区分',
+                'カテゴリ',
+                '金額',
+                'メモ'
+            ]);
+            
+            // データ行
+            foreach ($oeconomicas as $item) {
+                fputcsv($file, [
+                    $item->date->format('Y/m/d'),
+                    $item->balance === 'income' ? '収入' : '支出',
+                    $item->category,
+                    $item->amount,
+                    $item->memo ?: ''
+                ]);
+            }
+            
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Show CSV import form.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\View\View
+     */
+    public function importForm(Request $request)
+    {
+        $user = Auth::user();
+        
+        // 現在の年月を取得
+        $currentYear = $request->get('year', Carbon::now()->year);
+        $currentMonth = $request->get('month', Carbon::now()->month);
+        
+        // ユーザーのカテゴリを取得
+        $incomeCategories = Category::where('user_id', $user->id)
+            ->where('type', 'income')
+            ->orderBy('id')
+            ->get();
+            
+        $expenseCategories = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->orderBy('id')
+            ->get();
+
+        return view('household.import', compact(
+            'user',
+            'currentYear',
+            'currentMonth',
+            'incomeCategories',
+            'expenseCategories'
+        ));
+    }
+
+    /**
+     * Import oeconomica data from CSV.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function importCsv(Request $request)
+    {
+        $user = Auth::user();
+        
+        // ファイルのバリデーション
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:2048',
+        ], [
+            'csv_file.required' => 'CSVファイルを選択してください。',
+            'csv_file.file' => '正しいファイルを選択してください。',
+            'csv_file.mimes' => 'CSV形式のファイルを選択してください。',
+            'csv_file.max' => 'ファイルサイズは2MB以下にしてください。',
+        ]);
+
+        $file = $request->file('csv_file');
+        
+        try {
+            // CSVファイルを読み込み
+            $csvData = array_map('str_getcsv', file($file->getRealPath()));
+            
+            // ヘッダー行を除去
+            $header = array_shift($csvData);
+            
+            // データ検証とインポート
+            $importCount = 0;
+            $errorCount = 0;
+            $errors = [];
+            
+            // ユーザーのカテゴリを取得（検証用）
+            $userCategories = Category::where('user_id', $user->id)
+                ->pluck('type', 'category')
+                ->toArray();
+            
+            foreach ($csvData as $rowIndex => $row) {
+                $lineNumber = $rowIndex + 2; // ヘッダー行を考慮
+                
+                // 空行はスキップ
+                if (empty(array_filter($row))) {
+                    continue;
+                }
+                
+                // カラム数チェック
+                if (count($row) < 4) {
+                    $errors[] = "{$lineNumber}行目: データが不足しています。";
+                    $errorCount++;
+                    continue;
+                }
+                
+                $date = trim($row[0]);
+                $balanceText = trim($row[1]);
+                $category = trim($row[2]);
+                $amount = trim($row[3]);
+                $memo = isset($row[4]) ? trim($row[4]) : '';
+                
+                // 日付の検証
+                try {
+                    $parsedDate = Carbon::createFromFormat('Y/m/d', $date);
+                } catch (\Exception $e) {
+                    try {
+                        $parsedDate = Carbon::createFromFormat('Y-m-d', $date);
+                    } catch (\Exception $e2) {
+                        $errors[] = "{$lineNumber}行目: 日付形式が正しくありません（{$date}）。";
+                        $errorCount++;
+                        continue;
+                    }
+                }
+                
+                // 収支区分の検証
+                $balance = null;
+                if ($balanceText === '収入') {
+                    $balance = 'income';
+                } elseif ($balanceText === '支出') {
+                    $balance = 'expense';
+                } else {
+                    $errors[] = "{$lineNumber}行目: 収支区分は「収入」または「支出」で入力してください（{$balanceText}）。";
+                    $errorCount++;
+                    continue;
+                }
+                
+                // カテゴリの検証
+                if (!isset($userCategories[$category]) || $userCategories[$category] !== $balance) {
+                    $errors[] = "{$lineNumber}行目: カテゴリ「{$category}」は存在しないか、収支区分と一致しません。";
+                    $errorCount++;
+                    continue;
+                }
+                
+                // 金額の検証
+                if (!is_numeric($amount) || (int)$amount < 1) {
+                    $errors[] = "{$lineNumber}行目: 金額は1以上の数値で入力してください（{$amount}）。";
+                    $errorCount++;
+                    continue;
+                }
+                
+                // データを保存
+                try {
+                    Oeconomica::create([
+                        'user_id' => $user->id,
+                        'balance' => $balance,
+                        'date' => $parsedDate->format('Y-m-d'),
+                        'category' => $category,
+                        'amount' => (int)$amount,
+                        'memo' => $memo,
+                    ]);
+                    $importCount++;
+                } catch (\Exception $e) {
+                    $errors[] = "{$lineNumber}行目: データの保存に失敗しました。";
+                    $errorCount++;
+                }
+            }
+            
+            // 結果をセッションに保存
+            $message = "{$importCount}件のデータをインポートしました。";
+            if ($errorCount > 0) {
+                $message .= " {$errorCount}件のエラーがありました。";
+                return back()
+                    ->with('warning', $message)
+                    ->with('import_errors', $errors);
+            }
+            
+            return redirect()
+                ->route('household.input')
+                ->with('success', $message);
+                
+        } catch (\Exception $e) {
+            return back()->withErrors([
+                'csv_file' => 'CSVファイルの処理中にエラーが発生しました: ' . $e->getMessage()
+            ]);
         }
     }
 }
