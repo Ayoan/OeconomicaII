@@ -38,12 +38,12 @@ class HouseholdController extends Controller
         // ユーザーのカテゴリを取得
         $incomeCategories = Category::where('user_id', $user->id)
             ->where('type', 'income')
-            ->orderBy('category')
+            ->orderBy('id')
             ->get();
             
         $expenseCategories = Category::where('user_id', $user->id)
             ->where('type', 'expense')
-            ->orderBy('category')
+            ->orderBy('id')
             ->get();
 
         // 指定月の収支データを取得
@@ -562,8 +562,14 @@ class HouseholdController extends Controller
             $errors = [];
             
             // ユーザーのカテゴリを取得（検証用）
-            $userCategories = Category::where('user_id', $user->id)
-                ->pluck('type', 'category')
+            $incomeCategories = Category::where('user_id', $user->id)
+                ->where('type', 'income')
+                ->pluck('category')
+                ->toArray();
+            
+            $expenseCategories = Category::where('user_id', $user->id)
+                ->where('type', 'expense')
+                ->pluck('category')
                 ->toArray();
             
             foreach ($csvData as $rowIndex => $row) {
@@ -612,9 +618,12 @@ class HouseholdController extends Controller
                     continue;
                 }
                 
-                // カテゴリの検証
-                if (!isset($userCategories[$category]) || $userCategories[$category] !== $balance) {
-                    $errors[] = "{$lineNumber}行目: カテゴリ「{$category}」は存在しないか、収支区分と一致しません。";
+                // カテゴリの検証（収支区分に応じて適切なカテゴリリストを使用）
+                $validCategories = ($balance === 'income') ? $incomeCategories : $expenseCategories;
+                $balanceTextJP = ($balance === 'income') ? '収入' : '支出';
+                
+                if (!in_array($category, $validCategories)) {
+                    $errors[] = "{$lineNumber}行目: カテゴリ「{$category}」は{$balanceTextJP}カテゴリに存在しません。";
                     $errorCount++;
                     continue;
                 }
