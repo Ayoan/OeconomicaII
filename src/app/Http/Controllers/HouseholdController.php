@@ -177,24 +177,114 @@ class HouseholdController extends Controller
     }
 
     /**
-     * Show monthly data.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\View\View
+     * 月次レポート画面の表示
      */
     public function monthly(Request $request)
     {
         $user = Auth::user();
         
-        // 現在の年月を取得
-        $currentYear = $request->get('year', Carbon::now()->year);
-        $currentMonth = $request->get('month', Carbon::now()->month);
+        // 表示月の取得（デフォルトは現在月）
+        $targetMonth = $request->input('month', date('Y-m'));
+        $year = substr($targetMonth, 0, 4);
+        $month = substr($targetMonth, 5, 2);
         
-        // 一時的な実装
+        // 指定月のデータ取得
+        $monthlyData = Oeconomica::where('user_id', $user->id)
+            ->whereYear('date', $year)
+            ->whereMonth('date', $month)
+            ->orderBy('date', 'asc')
+            ->get();
+        
+        // 収入データの集計
+        $incomeByCategory = $monthlyData
+            ->where('balance', 'income')
+            ->groupBy('category')
+            ->map(function ($items) {
+                return $items->sum('amount');
+            });
+        
+        // 支出データの集計
+        $expenseByCategory = $monthlyData
+            ->where('balance', 'expense')
+            ->groupBy('category')
+            ->map(function ($items) {
+                return $items->sum('amount');
+            });
+        
+        // 合計値の計算
+        $totalIncome = $incomeByCategory->sum();
+        $totalExpense = $expenseByCategory->sum();
+        $balance = $totalIncome - $totalExpense;
+        
+        // 日別推移データの準備
+        $dailyData = $monthlyData->groupBy(function ($item) {
+            return Carbon::parse($item->date)->format('d');
+        })->map(function ($dayItems) {
+            return [
+                'income' => $dayItems->where('balance', 'income')->sum('amount'),
+                'expense' => $dayItems->where('balance', 'expense')->sum('amount'),
+            ];
+        });
+        
+        // 前月比較用データ
+        $prevMonth = Carbon::parse($targetMonth)->subMonth();
+        $prevMonthData = Oeconomica::where('user_id', $user->id)
+            ->whereYear('date', $prevMonth->year)
+            ->whereMonth('date', $prevMonth->month)
+            ->get();
+        
+        $prevTotalIncome = $prevMonthData->where('balance', 'income')->sum('amount');
+        $prevTotalExpense = $prevMonthData->where('balance', 'expense')->sum('amount');
+        
+        // 前月比の計算
+        $incomeChange = $prevTotalIncome > 0 
+            ? round((($totalIncome - $prevTotalIncome) / $prevTotalIncome) * 100, 1)
+            : 0;
+        $expenseChange = $prevTotalExpense > 0 
+            ? round((($totalExpense - $prevTotalExpense) / $prevTotalExpense) * 100, 1)
+            : 0;
+        
+        // カテゴリ別色設定の取得
+        $categories = Category::where('user_id', $user->id)->get();
+        $categoryColors = $categories->pluck('color', 'category')->toArray();
+        
+        // デフォルトカラーパレット
+        $defaultColors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+            '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384',
+            '#36A2EB', '#FFCE56', '#E7E9ED', '#71B37C', '#519D9E',
+            '#58595B', '#8B8C8E', '#C0C0C0', '#D4A76A', '#5DA5A2'
+        ];
+        
+        // カテゴリに色を割り当て
+        $incomeColors = [];
+        $expenseColors = [];
+        $colorIndex = 0;
+        
+        foreach ($incomeByCategory as $category => $amount) {
+            $incomeColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
+            $colorIndex++;
+        }
+        
+        foreach ($expenseByCategory as $category => $amount) {
+            $expenseColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
+            $colorIndex++;
+        }
+        
         return view('household.monthly', compact(
-            'user',
-            'currentYear',
-            'currentMonth'
+            'targetMonth',
+            'incomeByCategory',
+            'expenseByCategory',
+            'totalIncome',
+            'totalExpense',
+            'balance',
+            'dailyData',
+            'incomeChange',
+            'expenseChange',
+            'prevTotalIncome',
+            'prevTotalExpense',
+            'incomeColors',
+            'expenseColors'
         ));
     }
 
