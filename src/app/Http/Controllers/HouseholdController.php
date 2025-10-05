@@ -298,13 +298,145 @@ class HouseholdController extends Controller
     {
         $user = Auth::user();
         
-        // 現在の年を取得
-        $currentYear = $request->get('year', Carbon::now()->year);
+        // 表示年の取得（デフォルトは現在年）
+        $targetYear = $request->input('year', date('Y'));
         
-        // 一時的な実装
+        // 年間の月別データを集計
+        $monthlyData = [];
+        $monthlyIncome = [];
+        $monthlyExpense = [];
+        $monthlyBalance = [];
+        
+        for ($month = 1; $month <= 12; $month++) {
+            $startDate = Carbon::create($targetYear, $month, 1)->startOfMonth();
+            $endDate = Carbon::create($targetYear, $month, 1)->endOfMonth();
+            
+            $monthData = Oeconomica::where('user_id', $user->id)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->get();
+            
+            $income = $monthData->where('balance', 'income')->sum('amount');
+            $expense = $monthData->where('balance', 'expense')->sum('amount');
+            
+            $monthlyIncome[] = $income;
+            $monthlyExpense[] = $expense;
+            $monthlyBalance[] = $income - $expense;
+            
+            $monthlyData[] = [
+                'month' => $month,
+                'income' => $income,
+                'expense' => $expense,
+                'balance' => $income - $expense,
+            ];
+        }
+        
+        // 年間合計
+        $totalIncome = array_sum($monthlyIncome);
+        $totalExpense = array_sum($monthlyExpense);
+        $totalBalance = $totalIncome - $totalExpense;
+        
+        // 年間平均
+        $avgIncome = $totalIncome / 12;
+        $avgExpense = $totalExpense / 12;
+        $avgBalance = $totalBalance / 12;
+        
+        // カテゴリ別年間集計
+        $yearData = Oeconomica::where('user_id', $user->id)
+            ->whereYear('date', $targetYear)
+            ->get();
+        
+        $incomeByCategory = $yearData
+            ->where('balance', 'income')
+            ->groupBy('category')
+            ->map(function ($items) {
+                return $items->sum('amount');
+            })->sortByDesc(function ($amount) {
+                return $amount;
+            });
+        
+        $expenseByCategory = $yearData
+            ->where('balance', 'expense')
+            ->groupBy('category')
+            ->map(function ($items) {
+                return $items->sum('amount');
+            })->sortByDesc(function ($amount) {
+                return $amount;
+            });
+        
+        // 前年比較データ
+        $prevYear = $targetYear - 1;
+        $prevYearData = Oeconomica::where('user_id', $user->id)
+            ->whereYear('date', $prevYear)
+            ->get();
+        
+        $prevTotalIncome = $prevYearData->where('balance', 'income')->sum('amount');
+        $prevTotalExpense = $prevYearData->where('balance', 'expense')->sum('amount');
+        
+        // 前年比の計算
+        $incomeChange = $prevTotalIncome > 0 
+            ? round((($totalIncome - $prevTotalIncome) / $prevTotalIncome) * 100, 1)
+            : 0;
+        $expenseChange = $prevTotalExpense > 0 
+            ? round((($totalExpense - $prevTotalExpense) / $prevTotalExpense) * 100, 1)
+            : 0;
+        
+        // 最高・最低月の特定
+        $maxIncomeMonth = array_search(max($monthlyIncome), $monthlyIncome) + 1;
+        $minIncomeMonth = array_search(min($monthlyIncome), $monthlyIncome) + 1;
+        $maxExpenseMonth = array_search(max($monthlyExpense), $monthlyExpense) + 1;
+        $minExpenseMonth = array_search(min($monthlyExpense), $monthlyExpense) + 1;
+        
+        // カテゴリ別色設定の取得
+        $categories = Category::where('user_id', $user->id)->get();
+        $categoryColors = $categories->pluck('color', 'category')->toArray();
+        
+        // デフォルトカラーパレット
+        $defaultColors = [
+            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+            '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#FF6384',
+            '#36A2EB', '#FFCE56', '#E7E9ED', '#71B37C', '#519D9E',
+            '#58595B', '#8B8C8E', '#C0C0C0', '#D4A76A', '#5DA5A2'
+        ];
+        
+        // カテゴリに色を割り当て
+        $incomeColors = [];
+        $expenseColors = [];
+        $colorIndex = 0;
+        
+        foreach ($incomeByCategory as $category => $amount) {
+            $incomeColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
+            $colorIndex++;
+        }
+        
+        foreach ($expenseByCategory as $category => $amount) {
+            $expenseColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
+            $colorIndex++;
+        }
+        
         return view('household.yearly', compact(
-            'user',
-            'currentYear'
+            'targetYear',
+            'monthlyData',
+            'monthlyIncome',
+            'monthlyExpense',
+            'monthlyBalance',
+            'totalIncome',
+            'totalExpense',
+            'totalBalance',
+            'avgIncome',
+            'avgExpense',
+            'avgBalance',
+            'incomeByCategory',
+            'expenseByCategory',
+            'incomeChange',
+            'expenseChange',
+            'prevTotalIncome',
+            'prevTotalExpense',
+            'maxIncomeMonth',
+            'minIncomeMonth',
+            'maxExpenseMonth',
+            'minExpenseMonth',
+            'incomeColors',
+            'expenseColors'
         ));
     }
 
