@@ -98,12 +98,14 @@
                         <label class="form-label">収支区分</label>
                         <div class="radio-group">
                             <label class="radio-option income">
-                                <input type="radio" name="balance" value="income" {{ old('balance') == 'income' ? 'checked' : '' }} required>
+                                <input type="radio" name="balance" value="income" 
+                                    {{ (session('keep_balance') ?? old('balance')) == 'income' ? 'checked' : '' }} required>
                                 <span class="radio-custom"></span>
                                 <span class="radio-text">収入</span>
                             </label>
                             <label class="radio-option expense">
-                                <input type="radio" name="balance" value="expense" {{ old('balance') == 'expense' ? 'checked' : '' }} required>
+                                <input type="radio" name="balance" value="expense" 
+                                    {{ (session('keep_balance') ?? old('balance')) == 'expense' ? 'checked' : '' }} required>
                                 <span class="radio-custom"></span>
                                 <span class="radio-text">支出</span>
                             </label>
@@ -117,7 +119,7 @@
                                id="date" 
                                name="date" 
                                class="form-input"
-                               value="{{ old('date', Carbon\Carbon::now()->format('Y-m-d')) }}"
+                               value="{{ session('keep_date') ?? old('date', Carbon\Carbon::now()->format('Y-m-d')) }}"
                                min="{{ $startDate->format('Y-m-d') }}"
                                max="{{ $endDate->format('Y-m-d') }}"
                                required>

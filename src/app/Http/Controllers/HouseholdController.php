@@ -144,7 +144,9 @@ class HouseholdController extends Controller
                     'year' => $currentYear,
                     'month' => $currentMonth
                 ])
-                ->with('success', $message);
+                ->with('success', $message)
+                ->with('keep_date', $validatedData['date'])
+                ->with('keep_balance', $validatedData['balance']);
 
         } catch (\Exception $e) {
             return back()->withErrors([
@@ -438,20 +440,6 @@ class HouseholdController extends Controller
             'incomeColors',
             'expenseColors'
         ));
-    }
-
-    /**
-     * Show settings page.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\View\View
-     */
-    public function settings(Request $request)
-    {
-        $user = Auth::user();
-        
-        // 一時的な実装
-        return view('household.settings', compact('user'));
     }
 
     /**
@@ -892,5 +880,205 @@ class HouseholdController extends Controller
                 'csv_file' => 'CSVファイルの処理中にエラーが発生しました: ' . $e->getMessage()
             ]);
         }
+    }
+    /**
+     * Display the settings page.
+     */
+    public function settings()
+    {
+        $user = Auth::user();
+        
+        // カテゴリを取得（並び順でソート）
+        $incomeCategories = Category::where('user_id', $user->id)
+            ->where('type', 'income')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        
+        $expenseCategories = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        
+        return view('household.settings', compact('incomeCategories', 'expenseCategories'));
+    }
+
+    /**
+     * Store a new category.
+     */
+    public function storeCategory(Request $request)
+    {
+        $user = Auth::user();
+        
+        $validated = $request->validate([
+            'type' => 'required|in:income,expense',
+            'category' => 'required|string|max:255',
+            'color' => 'required|string|regex:/^#[0-9A-Fa-f]{6}$/',
+        ], [
+            'type.required' => '収支区分を選択してください。',
+            'type.in' => '収支区分が不正です。',
+            'category.required' => 'カテゴリ名を入力してください。',
+            'category.max' => 'カテゴリ名は255文字以内で入力してください。',
+            'color.required' => '色を選択してください。',
+            'color.regex' => '色の形式が不正です。',
+        ]);
+        
+        // 同じ収支区分で同名のカテゴリが既に存在しないかチェック
+        $exists = Category::where('user_id', $user->id)
+            ->where('type', $validated['type'])
+            ->where('category', $validated['category'])
+            ->exists();
+        
+        if ($exists) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => '同じ名前のカテゴリが既に存在します。'], 422);
+            }
+            return back()->withErrors(['category' => '同じ名前のカテゴリが既に存在します。']);
+        }
+        
+        // 現在の最大sort_orderを取得
+        $maxOrder = Category::where('user_id', $user->id)
+            ->where('type', $validated['type'])
+            ->max('sort_order') ?? 0;
+        
+        Category::create([
+            'user_id' => $user->id,
+            'type' => $validated['type'],
+            'category' => $validated['category'],
+            'color' => $validated['color'],
+            'sort_order' => $maxOrder + 1,
+        ]);
+        
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'カテゴリを追加しました。']);
+        }
+        
+        return back()->with('success', 'カテゴリを追加しました。');
+    }
+
+    /**
+     * Update a category.
+     */
+    public function updateCategory(Request $request, $id)
+    {
+        $user = Auth::user();
+        
+        $category = Category::where('user_id', $user->id)->findOrFail($id);
+        
+        $validated = $request->validate([
+            'category' => 'required|string|max:255',
+            'color' => 'required|string|regex:/^#[0-9A-Fa-f]{6}$/',
+        ], [
+            'category.required' => 'カテゴリ名を入力してください。',
+            'category.max' => 'カテゴリ名は255文字以内で入力してください。',
+            'color.required' => '色を選択してください。',
+            'color.regex' => '色の形式が不正です。',
+        ]);
+        
+        // 同じ収支区分で同名のカテゴリが既に存在しないかチェック（自分自身は除く）
+        $exists = Category::where('user_id', $user->id)
+            ->where('type', $category->type)
+            ->where('category', $validated['category'])
+            ->where('id', '!=', $id)
+            ->exists();
+        
+        if ($exists) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => '同じ名前のカテゴリが既に存在します。'], 422);
+            }
+            return back()->withErrors(['category' => '同じ名前のカテゴリが既に存在します。']);
+        }
+        
+        $category->update([
+            'category' => $validated['category'],
+            'color' => $validated['color'],
+        ]);
+        
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'カテゴリを更新しました。']);
+        }
+        
+        return back()->with('success', 'カテゴリを更新しました。');
+    }
+
+    /**
+     * Delete a category.
+     */
+    public function deleteCategory(Request $request, $id)
+    {
+        $user = Auth::user();
+        
+        $category = Category::where('user_id', $user->id)->findOrFail($id);
+        
+        // このカテゴリを使用している収支データがあるかチェック
+        $usedCount = Oeconomica::where('user_id', $user->id)
+            ->where('category', $category->category)
+            ->where('balance', $category->type)
+            ->count();
+        
+        if ($usedCount > 0) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => "このカテゴリは{$usedCount}件の収支データで使用されているため削除できません。"
+                ], 422);
+            }
+            return back()->withErrors(['category' => "このカテゴリは{$usedCount}件の収支データで使用されているため削除できません。"]);
+        }
+        
+        $category->delete();
+        
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'カテゴリを削除しました。']);
+        }
+        
+        return back()->with('success', 'カテゴリを削除しました。');
+    }
+
+    /**
+     * Reorder categories.
+     */
+    public function reorderCategories(Request $request)
+    {
+        $user = Auth::user();
+        
+        $validated = $request->validate([
+            'type' => 'required|in:income,expense',
+            'order' => 'required|array',
+            'order.*' => 'required|integer|exists:categories,id',
+        ]);
+        
+        foreach ($validated['order'] as $index => $categoryId) {
+            Category::where('user_id', $user->id)
+                ->where('id', $categoryId)
+                ->where('type', $validated['type'])
+                ->update(['sort_order' => $index]);
+        }
+        
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => '並び順を更新しました。']);
+        }
+        
+        return back()->with('success', '並び順を更新しました。');
+    }
+
+    /**
+     * Reset categories to default.
+     */
+    public function resetCategories(Request $request)
+    {
+        $user = Auth::user();
+        
+        // 現在のカテゴリを全て削除
+        Category::where('user_id', $user->id)->delete();
+        
+        // デフォルトカテゴリを再作成
+        $this->createDefaultCategories($user->id);
+        
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'デフォルトカテゴリにリセットしました。']);
+        }
+        
+        return back()->with('success', 'デフォルトカテゴリにリセットしました。');
     }
 }

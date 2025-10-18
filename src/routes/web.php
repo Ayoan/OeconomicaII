@@ -73,6 +73,13 @@ Route::middleware(['auth'])->group(function () {
         
         // 設定
         Route::get('/settings', [HouseholdController::class, 'settings'])->name('settings');
+
+        // カテゴリ管理API
+        Route::post('/category/store', [HouseholdController::class, 'storeCategory'])->name('category.store');
+        Route::put('/category/update/{id}', [HouseholdController::class, 'updateCategory'])->name('category.update');
+        Route::delete('/category/delete/{id}', [HouseholdController::class, 'deleteCategory'])->name('category.delete');
+        Route::post('/category/reorder', [HouseholdController::class, 'reorderCategories'])->name('category.reorder');
+        Route::post('/category/reset', [HouseholdController::class, 'resetCategories'])->name('category.reset');
     });
 });
 ?>
