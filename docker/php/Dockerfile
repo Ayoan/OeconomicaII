@@ -10,8 +10,10 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     libzip-dev \
+    oniguruma-dev \
     zip \
-    unzip
+    unzip \
+    mysql-client
 
 # PHPの拡張機能をインストール
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
@@ -35,4 +37,12 @@ RUN curl -sL https://deb.nodesource.com/setup_16.x | bash - \
 # 作業ディレクトリの設定
 WORKDIR /var/www/html
 
+# エントリーポイントスクリプトをコピー
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# www-dataユーザーの権限設定
+RUN chown -R www-data:www-data /var/www/html
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["php-fpm"]
