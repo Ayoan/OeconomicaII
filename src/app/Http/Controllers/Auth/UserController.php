@@ -42,11 +42,11 @@ class UserController extends Controller
     {
         // バリデーション
         $request->validate([
-            'email' => ['required', 'email'],
+            'username' => ['required', 'string', 'max:50'],
             'password' => ['required'],
         ], [
-            'email.required' => 'メールアドレスを入力してください。',
-            'email.email' => '正しいメールアドレス形式で入力してください。',
+            'username.required' => 'ユーザー名を入力してください。',
+            'username.max' => 'ユーザー名は50文字以内で入力してください。',
             'password.required' => 'パスワードを入力してください。',
         ]);
 
@@ -54,21 +54,21 @@ class UserController extends Controller
         $this->ensureIsNotRateLimited($request);
 
         // ユーザーが存在するかチェック
-        $user = User::where('email', $request->email)->first();
-        
+        $user = User::where('username', $request->username)->first();
+
         if (!$user) {
             // ユーザーが存在しない場合のログ
-            \Log::warning('Login attempt with non-existent email', [
-                'email' => $request->email,
+            \Log::warning('Login attempt with non-existent username', [
+                'username' => $request->username,
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
-            
+
             // レート制限カウンターを増加
             $this->hitRateLimit($request);
-            
+
             throw ValidationException::withMessages([
-                'email' => 'ログイン情報が正しくありません。',
+                'username' => 'ログイン情報が正しくありません。',
             ]);
         }
 
@@ -77,16 +77,16 @@ class UserController extends Controller
             // パスワード不正の場合のログ
             \Log::warning('Login attempt with incorrect password', [
                 'user_id' => $user->id,
-                'email' => $request->email,
+                'username' => $request->username,
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
-            
+
             // レート制限カウンターを増加
             $this->hitRateLimit($request);
-            
+
             throw ValidationException::withMessages([
-                'email' => 'ログイン情報が正しくありません。',
+                'username' => 'ログイン情報が正しくありません。',
             ]);
         }
 
@@ -166,13 +166,13 @@ class UserController extends Controller
             // レート制限に引っかかった場合のログ
             \Log::warning('Rate limit exceeded for login', [
                 'ip' => $request->ip(),
-                'email' => $request->input('email'),
+                'username' => $request->input('username'),
                 'available_in_seconds' => $seconds,
                 'max_attempts' => $maxAttempts
             ]);
-            
+
             throw ValidationException::withMessages([
-                'email' => "ログイン試行回数が上限（{$maxAttempts}回）に達しました。{$minutes}分後に再試行してください。",
+                'username' => "ログイン試行回数が上限（{$maxAttempts}回）に達しました。{$minutes}分後に再試行してください。",
             ]);
         }
     }
@@ -194,7 +194,7 @@ class UserController extends Controller
         $attempts = RateLimiter::attempts($key);
         \Log::info('Login attempt recorded', [
             'ip' => $request->ip(),
-            'email' => $request->input('email'),
+            'username' => $request->input('username'),
             'current_attempts' => $attempts,
             'max_attempts' => 5
         ]);
@@ -213,7 +213,7 @@ class UserController extends Controller
         
         \Log::info('Rate limit cleared for successful login', [
             'ip' => $request->ip(),
-            'email' => $request->input('email')
+            'username' => $request->input('username')
         ]);
     }
 
@@ -226,11 +226,11 @@ class UserController extends Controller
     protected function getRateLimitKey(Request $request)
     {
         // IPアドレスベースでレート制限
-        // より厳密にする場合は、メールアドレスも含めることも可能
+        // より厳密にする場合は、ユーザー名も含めることも可能
         return 'login.' . $request->ip();
-        
-        // メールアドレス + IPアドレスでの制限例：
-        // return 'login.' . $request->input('email') . '|' . $request->ip();
+
+        // ユーザー名 + IPアドレスでの制限例：
+        // return 'login.' . $request->input('username') . '|' . $request->ip();
     }
 
     /**

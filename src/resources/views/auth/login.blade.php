@@ -33,15 +33,15 @@
             @csrf
             
             <div class="form-group">
-                <input type="email" 
-                       class="form-input @error('email') is-invalid @enderror" 
-                       name="email" 
-                       value="{{ old('email') }}" 
-                       placeholder="ID（メールアドレス）" 
-                       required 
-                       autocomplete="email" 
+                <input type="text"
+                       class="form-input @error('username') is-invalid @enderror"
+                       name="username"
+                       value="{{ old('username') }}"
+                       placeholder="ユーザー名"
+                       required
+                       autocomplete="username"
                        autofocus>
-                @error('email')
+                @error('username')
                     <span class="invalid-feedback">{{ $message }}</span>
                 @enderror
             </div>
