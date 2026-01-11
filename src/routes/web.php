@@ -74,6 +74,13 @@ Route::middleware(['auth'])->group(function () {
         // 設定
         Route::get('/settings', [HouseholdController::class, 'settings'])->name('settings');
 
+        // サブスクリプション管理
+        Route::get('/subscriptions', [HouseholdController::class, 'subscriptions'])->name('subscriptions');
+        Route::post('/subscriptions/store', [HouseholdController::class, 'storeSubscription'])->name('subscriptions.store');
+        Route::put('/subscriptions/update/{id}', [HouseholdController::class, 'updateSubscription'])->name('subscriptions.update');
+        Route::delete('/subscriptions/delete/{id}', [HouseholdController::class, 'deleteSubscription'])->name('subscriptions.delete');
+        Route::post('/subscriptions/toggle/{id}', [HouseholdController::class, 'toggleSubscription'])->name('subscriptions.toggle');
+
         // カテゴリ管理API
         Route::post('/category/store', [HouseholdController::class, 'storeCategory'])->name('category.store');
         Route::put('/category/update/{id}', [HouseholdController::class, 'updateCategory'])->name('category.update');

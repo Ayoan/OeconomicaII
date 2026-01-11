@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Category;
 use App\Models\Oeconomica;
+use App\Models\Subscription;
 use Carbon\Carbon;
 
 class HouseholdController extends Controller
@@ -887,21 +888,25 @@ class HouseholdController extends Controller
     public function settings()
     {
         $user = Auth::user();
-        
+
         // カテゴリを取得（並び順でソート）
         $incomeCategories = Category::where('user_id', $user->id)
             ->where('type', 'income')
-            ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
-        
+
         $expenseCategories = Category::where('user_id', $user->id)
             ->where('type', 'expense')
-            ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
-        
-        return view('household.settings', compact('incomeCategories', 'expenseCategories'));
+
+        // サブスクリプションを取得
+        $subscriptions = Subscription::where('user_id', $user->id)
+            ->orderBy('is_active', 'desc')
+            ->orderBy('day', 'asc')
+            ->get();
+
+        return view('household.settings', compact('incomeCategories', 'expenseCategories', 'subscriptions'));
     }
 
     /**
@@ -1080,5 +1085,155 @@ class HouseholdController extends Controller
         }
         
         return back()->with('success', 'デフォルトカテゴリにリセットしました。');
+    }
+
+    /**
+     * Display subscriptions page.
+     */
+    public function subscriptions()
+    {
+        $user = Auth::user();
+
+        // 支出カテゴリのみ取得（サブスクリプションは支出のみ）
+        $expenseCategories = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->orderBy('id')
+            ->get();
+
+        // サブスクリプションを取得
+        $subscriptions = Subscription::where('user_id', $user->id)
+            ->orderBy('is_active', 'desc')
+            ->orderBy('day', 'asc')
+            ->get();
+
+        return view('household.subscriptions', compact('expenseCategories', 'subscriptions'));
+    }
+
+    /**
+     * Store a new subscription.
+     */
+    public function storeSubscription(Request $request)
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'subscription' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:1',
+            'day' => 'required|integer|min:1|max:31',
+        ], [
+            'subscription.required' => 'サブスクリプション名を入力してください。',
+            'category.required' => 'カテゴリを選択してください。',
+            'amount.required' => '金額を入力してください。',
+            'amount.min' => '金額は1円以上で入力してください。',
+            'day.required' => '実行日を選択してください。',
+            'day.min' => '実行日は1日以上で指定してください。',
+            'day.max' => '実行日は31日以下で指定してください。',
+        ]);
+
+        // カテゴリの所有権確認（支出カテゴリのみ）
+        $categoryExists = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->where('category', $validated['category'])
+            ->exists();
+
+        if (!$categoryExists) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => '選択されたカテゴリが存在しません。'], 422);
+            }
+            return back()->withErrors(['category' => '選択されたカテゴリが存在しません。']);
+        }
+
+        Subscription::create([
+            'user_id' => $user->id,
+            'subscription' => $validated['subscription'],
+            'category' => $validated['category'],
+            'amount' => $validated['amount'],
+            'day' => $validated['day'],
+            'is_active' => true,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'サブスクリプションを登録しました。']);
+        }
+
+        return back()->with('success', 'サブスクリプションを登録しました。');
+    }
+
+    /**
+     * Update a subscription.
+     */
+    public function updateSubscription(Request $request, $id)
+    {
+        $user = Auth::user();
+        $subscription = Subscription::where('user_id', $user->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'subscription' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:1',
+            'day' => 'required|integer|min:1|max:31',
+        ]);
+
+        // カテゴリの所有権確認
+        $categoryExists = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->where('category', $validated['category'])
+            ->exists();
+
+        if (!$categoryExists) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => '選択されたカテゴリが存在しません。'], 422);
+            }
+            return back()->withErrors(['category' => '選択されたカテゴリが存在しません。']);
+        }
+
+        $subscription->update($validated);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'サブスクリプションを更新しました。']);
+        }
+
+        return back()->with('success', 'サブスクリプションを更新しました。');
+    }
+
+    /**
+     * Delete a subscription.
+     */
+    public function deleteSubscription(Request $request, $id)
+    {
+        $user = Auth::user();
+        $subscription = Subscription::where('user_id', $user->id)->findOrFail($id);
+
+        $subscription->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'サブスクリプションを削除しました。']);
+        }
+
+        return back()->with('success', 'サブスクリプションを削除しました。');
+    }
+
+    /**
+     * Toggle active status of a subscription.
+     */
+    public function toggleSubscription(Request $request, $id)
+    {
+        $user = Auth::user();
+        $subscription = Subscription::where('user_id', $user->id)->findOrFail($id);
+
+        $subscription->update(['is_active' => !$subscription->is_active]);
+
+        $status = $subscription->is_active ? '有効' : '無効';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "サブスクリプションを{$status}にしました。",
+                'is_active' => $subscription->is_active
+            ]);
+        }
+
+        return back()->with('success', "サブスクリプションを{$status}にしました。");
     }
 }

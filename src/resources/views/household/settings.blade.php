@@ -33,6 +33,20 @@
             </div>
         @endif
 
+        <!-- タブナビゲーション -->
+        <div class="tab-navigation">
+            <button class="tab-button active" data-tab="category-tab" onclick="switchTab('category-tab')">
+                <span class="tab-icon">🏷️</span>
+                カテゴリ管理
+            </button>
+            <button class="tab-button" data-tab="subscription-tab" onclick="switchTab('subscription-tab')">
+                <span class="tab-icon">🔄</span>
+                サブスクリプション管理
+            </button>
+        </div>
+
+        <!-- カテゴリ管理タブ -->
+        <div id="category-tab" class="tab-content active">
         <!-- カテゴリ管理カード -->
         <div class="settings-card">
             <div class="card-header">
@@ -120,6 +134,91 @@
                 </div>
             </div>
         </div>
+        </div>
+        <!-- カテゴリ管理タブ終了 -->
+
+        <!-- サブスクリプション管理タブ -->
+        <div id="subscription-tab" class="tab-content" style="display: none;">
+            <!-- 追加ボタン -->
+            <div class="add-button-container">
+                <button class="add-btn-subscription" onclick="openAddSubscriptionModal()">
+                    <span class="btn-icon">➕</span>
+                    サブスクリプションを追加
+                </button>
+            </div>
+
+            <!-- サブスクリプション一覧 -->
+            @if(isset($subscriptions) && $subscriptions->count() > 0)
+                <div class="subscriptions-grid">
+                    @foreach($subscriptions as $subscription)
+                        <div class="subscription-card {{ $subscription->is_active ? 'active' : 'inactive' }}">
+                            <div class="subscription-header">
+                                <h3 class="subscription-name">{{ $subscription->subscription }}</h3>
+                                <div class="toggle-container">
+                                    <label class="toggle-switch {{ $subscription->is_active ? 'active' : '' }}"
+                                           onclick="toggleSubscription({{ $subscription->id }}, this)">
+                                        <span class="toggle-label">{{ $subscription->is_active ? '有効' : '無効' }}</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="subscription-body">
+                                <div class="subscription-amount">
+                                    ¥{{ number_format($subscription->amount) }}
+                                </div>
+
+                                <div class="subscription-details">
+                                    <div class="detail-item">
+                                        <span class="detail-label">カテゴリ</span>
+                                        <span class="category-badge-sub">{{ $subscription->category }}</span>
+                                    </div>
+
+                                    <div class="detail-item">
+                                        <span class="detail-label">実行日</span>
+                                        <span class="detail-value">{{ $subscription->execution_day_text }}</span>
+                                    </div>
+
+                                    <div class="detail-item">
+                                        <span class="detail-label">次回実行</span>
+                                        <span class="detail-value">{{ $subscription->next_execution_date->format('Y年m月d日') }}</span>
+                                    </div>
+
+                                    @if($subscription->payday)
+                                        <div class="detail-item">
+                                            <span class="detail-label">最終実行</span>
+                                            <span class="detail-value">{{ $subscription->payday->format('Y年m月d日') }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="subscription-footer">
+                                <button class="action-btn-sub edit-btn-sub"
+                                        onclick="openEditSubscriptionModal({{ $subscription->id }}, '{{ $subscription->subscription }}', '{{ $subscription->category }}', {{ $subscription->amount }}, {{ $subscription->day }})">
+                                    <span>✏️</span> 編集
+                                </button>
+                                <button class="action-btn-sub delete-btn-sub"
+                                        onclick="deleteSubscription({{ $subscription->id }}, '{{ $subscription->subscription }}')">
+                                    <span>🗑️</span> 削除
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <!-- 空状態 -->
+                <div class="empty-state">
+                    <div class="empty-icon">🔄</div>
+                    <p class="empty-text">まだサブスクリプションが登録されていません</p>
+                    <p class="empty-subtext">定期的な支出を登録して、自動で家計簿に記録しましょう</p>
+                    <button class="empty-add-btn" onclick="openAddSubscriptionModal()">
+                        <span class="btn-icon">➕</span>
+                        サブスクリプションを追加
+                    </button>
+                </div>
+            @endif
+        </div>
+        <!-- サブスクリプション管理タブ終了 -->
     </div>
 </div>
 
@@ -246,6 +345,144 @@
     </div>
 </div>
 
+<!-- サブスクリプション追加モーダル -->
+<div id="addSubscriptionModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="modal-icon">➕</span>
+                サブスクリプション追加
+            </h3>
+            <button class="modal-close" type="button" onclick="closeAddSubscriptionModal()">&times;</button>
+        </div>
+
+        <form id="addSubscriptionForm" class="modal-form" onsubmit="submitAddSubscription(event)">
+            @csrf
+
+            <div class="form-group">
+                <label for="add-subscription-name" class="form-label">サブスクリプション名</label>
+                <input type="text"
+                       id="add-subscription-name"
+                       name="subscription"
+                       class="form-input"
+                       placeholder="例: Netflix, Spotify"
+                       required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="add-subscription-category" class="form-label">カテゴリ</label>
+                    <select id="add-subscription-category" name="category" class="form-select" required>
+                        <option value="">選択してください</option>
+                        @if(isset($expenseCategories))
+                            @foreach($expenseCategories as $category)
+                                <option value="{{ $category->category }}">{{ $category->category }}</option>
+                            @endforeach
+                        @endif
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="add-subscription-day" class="form-label">実行日</label>
+                    <select id="add-subscription-day" name="day" class="form-select" required>
+                        <option value="">選択してください</option>
+                        @for($i = 1; $i <= 31; $i++)
+                            <option value="{{ $i }}">{{ $i }}日</option>
+                        @endfor
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="add-subscription-amount" class="form-label">金額（円）</label>
+                <input type="text"
+                       id="add-subscription-amount"
+                       name="amount"
+                       class="form-input"
+                       placeholder="0"
+                       required>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn" onclick="closeAddSubscriptionModal()">キャンセル</button>
+                <button type="submit" class="submit-btn">
+                    <span class="btn-icon">💾</span>
+                    登録
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- サブスクリプション編集モーダル -->
+<div id="editSubscriptionModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="modal-icon">✏️</span>
+                サブスクリプション編集
+            </h3>
+            <button class="modal-close" type="button" onclick="closeEditSubscriptionModal()">&times;</button>
+        </div>
+
+        <form id="editSubscriptionForm" class="modal-form" onsubmit="submitEditSubscription(event)">
+            @csrf
+            @method('PUT')
+            <input type="hidden" id="edit-subscription-id" name="id">
+
+            <div class="form-group">
+                <label for="edit-subscription-name" class="form-label">サブスクリプション名</label>
+                <input type="text"
+                       id="edit-subscription-name"
+                       name="subscription"
+                       class="form-input"
+                       required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="edit-subscription-category" class="form-label">カテゴリ</label>
+                    <select id="edit-subscription-category" name="category" class="form-select" required>
+                        <option value="">選択してください</option>
+                        @if(isset($expenseCategories))
+                            @foreach($expenseCategories as $category)
+                                <option value="{{ $category->category }}">{{ $category->category }}</option>
+                            @endforeach
+                        @endif
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit-subscription-day" class="form-label">実行日</label>
+                    <select id="edit-subscription-day" name="day" class="form-select" required>
+                        <option value="">選択してください</option>
+                        @for($i = 1; $i <= 31; $i++)
+                            <option value="{{ $i }}">{{ $i }}日</option>
+                        @endfor
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="edit-subscription-amount" class="form-label">金額（円）</label>
+                <input type="text"
+                       id="edit-subscription-amount"
+                       name="amount"
+                       class="form-input"
+                       required>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn" onclick="closeEditSubscriptionModal()">キャンセル</button>
+                <button type="submit" class="submit-btn">
+                    <span class="btn-icon">💾</span>
+                    更新
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
     .settings-wrapper {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -282,6 +519,69 @@
     .page-subtitle {
         color: #666;
         font-size: 16px;
+    }
+
+    /* タブナビゲーション */
+    .tab-navigation {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        background: white;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .tab-button {
+        flex: 1;
+        padding: 15px 20px;
+        background: transparent;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 500;
+        color: #666;
+    }
+
+    .tab-button:hover {
+        background: #f8f9fa;
+        color: #333;
+    }
+
+    .tab-button.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .tab-icon {
+        font-size: 20px;
+    }
+
+    /* タブコンテンツ */
+    .tab-content {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     /* アラート */
@@ -715,6 +1015,275 @@
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
 
+    /* サブスクリプション管理スタイル */
+    .add-button-container {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .add-btn-subscription {
+        padding: 15px 40px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 18px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .add-btn-subscription:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .subscriptions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .subscription-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        transition: transform 0.3s ease;
+    }
+
+    .subscription-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .subscription-card.inactive {
+        opacity: 0.6;
+    }
+
+    .subscription-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .subscription-name {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+    }
+
+    .toggle-container {
+        display: flex;
+        align-items: center;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 28px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: background 0.3s;
+        display: flex;
+        align-items: center;
+        padding: 0 5px;
+    }
+
+    .toggle-switch.active {
+        background: #28a745;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        background: white;
+        border-radius: 50%;
+        top: 3px;
+        left: 3px;
+        transition: left 0.3s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .toggle-switch.active::after {
+        left: 35px;
+    }
+
+    .toggle-label {
+        position: absolute;
+        right: -50px;
+        font-size: 12px;
+        white-space: nowrap;
+        font-weight: 500;
+    }
+
+    .subscription-body {
+        padding: 20px;
+    }
+
+    .subscription-amount {
+        font-size: 32px;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+
+    .subscription-details {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        font-size: 14px;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .detail-value {
+        font-size: 14px;
+        color: #333;
+        font-weight: 600;
+    }
+
+    .category-badge-sub {
+        padding: 4px 12px;
+        background: #667eea;
+        color: white;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .subscription-footer {
+        padding: 15px 20px;
+        background: #f8f9fa;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .action-btn-sub {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .edit-btn-sub {
+        background: #28a745;
+        color: white;
+    }
+
+    .edit-btn-sub:hover {
+        background: #218838;
+    }
+
+    .delete-btn-sub {
+        background: #dc3545;
+        color: white;
+    }
+
+    .delete-btn-sub:hover {
+        background: #c82333;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 30px;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+
+    .empty-text {
+        font-size: 18px;
+        margin-bottom: 10px;
+        color: #333;
+    }
+
+    .empty-subtext {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 30px;
+    }
+
+    .empty-add-btn {
+        padding: 12px 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .empty-add-btn:hover {
+        transform: translateY(-2px);
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .form-select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e1e8ed;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s ease;
+        background: white;
+    }
+
+    .form-select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
     /* レスポンシブ */
     @media (max-width: 768px) {
         .category-management {
@@ -737,6 +1306,27 @@
         .reset-btn {
             width: 100%;
             justify-content: center;
+        }
+
+        .tab-navigation {
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .tab-button {
+            width: 100%;
+        }
+
+        .subscriptions-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .page-title {
+            font-size: 24px;
         }
     }
 </style>
@@ -1071,6 +1661,246 @@
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
         }
+    }
+
+    // タブ切り替え機能
+    function switchTab(tabId) {
+        // すべてのタブコンテンツとボタンを非アクティブ化
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.style.display = 'none';
+            content.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+
+        // 選択されたタブをアクティブ化
+        const selectedTab = document.getElementById(tabId);
+        if (selectedTab) {
+            selectedTab.style.display = 'block';
+            selectedTab.classList.add('active');
+        }
+
+        const selectedButton = document.querySelector(`[data-tab="${tabId}"]`);
+        if (selectedButton) {
+            selectedButton.classList.add('active');
+        }
+
+        // URLハッシュを更新
+        window.location.hash = tabId;
+    }
+
+    // ページロード時にURLハッシュをチェックしてタブを開く
+    document.addEventListener('DOMContentLoaded', function() {
+        const hash = window.location.hash.substring(1);
+        if (hash === 'subscription-tab') {
+            switchTab('subscription-tab');
+        } else {
+            // デフォルトはカテゴリ管理タブ
+            switchTab('category-tab');
+        }
+    });
+
+    // サブスクリプション関連の関数
+    function formatSubscriptionAmount(input) {
+        let value = input.value.replace(/[^\d]/g, '');
+        if (value) {
+            input.value = parseInt(value).toLocaleString();
+        }
+    }
+
+    function openAddSubscriptionModal() {
+        document.getElementById('addSubscriptionModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeAddSubscriptionModal() {
+        document.getElementById('addSubscriptionModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        document.getElementById('addSubscriptionForm').reset();
+    }
+
+    function openEditSubscriptionModal(id, subscription, category, amount, day) {
+        document.getElementById('edit-subscription-id').value = id;
+        document.getElementById('edit-subscription-name').value = subscription;
+        document.getElementById('edit-subscription-category').value = category;
+        document.getElementById('edit-subscription-amount').value = parseInt(amount).toLocaleString();
+        document.getElementById('edit-subscription-day').value = day;
+
+        document.getElementById('editSubscriptionModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditSubscriptionModal() {
+        document.getElementById('editSubscriptionModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        document.getElementById('editSubscriptionForm').reset();
+    }
+
+    function submitAddSubscription(event) {
+        event.preventDefault();
+
+        const submitBtn = event.target.querySelector('.submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="btn-icon">⏳</span>登録中...';
+        submitBtn.disabled = true;
+
+        const formData = new FormData(event.target);
+        const amount = formData.get('amount').replace(/,/g, '');
+        formData.set('amount', amount);
+
+        fetch('/household/subscriptions/store', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.hash = 'subscription-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    }
+
+    function submitEditSubscription(event) {
+        event.preventDefault();
+
+        const submitBtn = event.target.querySelector('.submit-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="btn-icon">⏳</span>更新中...';
+        submitBtn.disabled = true;
+
+        const id = document.getElementById('edit-subscription-id').value;
+        const formData = new FormData(event.target);
+        const amount = formData.get('amount').replace(/,/g, '');
+        formData.set('amount', amount);
+
+        fetch(`/household/subscriptions/update/${id}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'X-HTTP-Method-Override': 'PUT',
+                'Accept': 'application/json',
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                window.location.hash = 'subscription-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    }
+
+    function deleteSubscription(id, name) {
+        if (!confirm(`「${name}」を削除しますか？`)) {
+            return;
+        }
+
+        fetch(`/household/subscriptions/delete/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                window.location.hash = 'subscription-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
+        });
+    }
+
+    function toggleSubscription(id, element) {
+        fetch(`/household/subscriptions/toggle/${id}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.hash = 'subscription-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
+        });
+    }
+
+    // 金額フォーマットイベント（サブスクリプション用）
+    const addSubAmount = document.getElementById('add-subscription-amount');
+    if (addSubAmount) {
+        addSubAmount.addEventListener('input', function() {
+            formatSubscriptionAmount(this);
+        });
+    }
+
+    const editSubAmount = document.getElementById('edit-subscription-amount');
+    if (editSubAmount) {
+        editSubAmount.addEventListener('input', function() {
+            formatSubscriptionAmount(this);
+        });
+    }
+
+    // モーダル外クリックで閉じる（サブスクリプション用）
+    const addSubModal = document.getElementById('addSubscriptionModal');
+    if (addSubModal) {
+        addSubModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddSubscriptionModal();
+            }
+        });
+    }
+
+    const editSubModal = document.getElementById('editSubscriptionModal');
+    if (editSubModal) {
+        editSubModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditSubscriptionModal();
+            }
+        });
     }
 </script>
 @endsection
