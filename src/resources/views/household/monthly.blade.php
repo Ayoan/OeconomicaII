@@ -38,7 +38,119 @@
                 </div>
             </form>
         </div>
-        
+
+        <!-- 予算サマリー（月単位予算のみ） -->
+        @if(isset($budgetData) && count($budgetData) > 0)
+        <div class="budget-summary-card">
+            <div class="budget-header">
+                <h2 class="budget-title">
+                    <span class="budget-icon">💰</span>
+                    今月の予算達成状況（月単位予算）
+                </h2>
+            </div>
+
+            <!-- 全体サマリー -->
+            <div class="budget-overall">
+                <div class="budget-stat">
+                    <div class="stat-label">合計予算</div>
+                    <div class="stat-value">¥{{ number_format($totalBudget) }}</div>
+                </div>
+                <div class="budget-stat">
+                    <div class="stat-label">合計実績</div>
+                    <div class="stat-value {{ $totalActual > $totalBudget ? 'over' : '' }}">
+                        ¥{{ number_format($totalActual) }}
+                    </div>
+                </div>
+                <div class="budget-stat">
+                    <div class="stat-label">残額</div>
+                    <div class="stat-value {{ $totalRemaining < 0 ? 'negative' : 'positive' }}">
+                        ¥{{ number_format($totalRemaining) }}
+                    </div>
+                </div>
+                <div class="budget-stat">
+                    <div class="stat-label">達成率</div>
+                    <div class="stat-value">{{ $totalRate }}%</div>
+                </div>
+            </div>
+
+            <!-- プログレスバー（全体） -->
+            <div class="budget-progress-container">
+                <div class="progress-bar">
+                    @php
+                        $progressClass = 'low';
+                        if ($totalRate >= 100) $progressClass = 'over';
+                        elseif ($totalRate >= 80) $progressClass = 'high';
+                        elseif ($totalRate >= 50) $progressClass = 'medium';
+                    @endphp
+                    <div class="progress-fill {{ $progressClass }}"
+                         style="width: {{ min($totalRate, 100) }}%"></div>
+                </div>
+                <div class="progress-label">{{ min($totalRate, 100) }}%</div>
+            </div>
+
+            <!-- カテゴリ別詳細 -->
+            <div class="budget-details">
+                <table class="budget-table">
+                    <thead>
+                        <tr>
+                            <th>カテゴリ</th>
+                            <th>予算</th>
+                            <th>実績</th>
+                            <th>残額</th>
+                            <th>達成率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($budgetData as $data)
+                        <tr class="{{ $data['is_over'] ? 'over-budget' : '' }}">
+                            <td>
+                                <div class="category-cell">
+                                    <span class="category-color" style="background-color: {{ $data['color'] }}"></span>
+                                    {{ $data['category'] }}
+                                </div>
+                            </td>
+                            <td>¥{{ number_format($data['budget']) }}</td>
+                            <td>¥{{ number_format($data['actual']) }}</td>
+                            <td>
+                                <span class="{{ $data['remaining'] < 0 ? 'negative' : 'positive' }}">
+                                    ¥{{ number_format($data['remaining']) }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="rate-cell">
+                                    @php
+                                        $rateClass = 'low';
+                                        if ($data['rate'] >= 100) $rateClass = 'over';
+                                        elseif ($data['rate'] >= 80) $rateClass = 'high';
+                                        elseif ($data['rate'] >= 50) $rateClass = 'medium';
+                                    @endphp
+                                    <div class="mini-progress">
+                                        <div class="mini-progress-fill {{ $rateClass }}"
+                                             style="width: {{ min($data['rate'], 100) }}%"></div>
+                                    </div>
+                                    <span class="rate-text {{ $data['is_over'] ? 'over' : '' }}">
+                                        {{ $data['rate'] }}%
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @else
+        <div class="budget-empty-card">
+            <div class="empty-icon">💰</div>
+            <p class="empty-text">月単位予算が設定されていません</p>
+            <p class="empty-subtext">設定画面から予算を設定すると、達成状況が表示されます</p>
+            <a href="{{ route('household.settings') }}#budget-tab" class="setup-link">
+                <span class="btn-icon">⚙️</span>
+                予算を設定する
+            </a>
+        </div>
+        @endif
+
         <!-- サマリーカード -->
         <div class="summary-cards">
             <div class="summary-card income-card">
@@ -705,6 +817,273 @@
 
         .percentage {
             width: 100px;
+        }
+    }
+
+    /* ===== 予算サマリースタイル ===== */
+    .budget-summary-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+
+    .budget-header {
+        margin-bottom: 25px;
+    }
+
+    .budget-title {
+        font-size: 24px;
+        font-weight: 300;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .budget-icon {
+        font-size: 28px;
+    }
+
+    .budget-overall {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .budget-stat {
+        text-align: center;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 10px;
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .stat-value.over {
+        color: #dc3545;
+    }
+
+    .stat-value.positive {
+        color: #28a745;
+    }
+
+    .stat-value.negative {
+        color: #dc3545;
+    }
+
+    .budget-progress-container {
+        margin-bottom: 25px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 30px;
+        background: #e9ecef;
+        border-radius: 15px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 10px;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .progress-fill.low {
+        background: linear-gradient(90deg, #28a745, #20c997);
+    }
+
+    .progress-fill.medium {
+        background: linear-gradient(90deg, #ffc107, #ff9800);
+    }
+
+    .progress-fill.high {
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+    }
+
+    .progress-fill.over {
+        background: linear-gradient(90deg, #dc3545, #c82333);
+    }
+
+    .progress-label {
+        text-align: right;
+        font-size: 14px;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .budget-details {
+        overflow-x: auto;
+    }
+
+    .budget-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .budget-table thead {
+        background: #f8f9fa;
+    }
+
+    .budget-table th {
+        padding: 12px;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 500;
+        color: #555;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .budget-table td {
+        padding: 15px 12px;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .budget-table tr.over-budget {
+        background: #fff5f5;
+    }
+
+    .category-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .category-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
+
+    .rate-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .mini-progress {
+        flex: 1;
+        height: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        min-width: 80px;
+    }
+
+    .mini-progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+
+    .mini-progress-fill.low {
+        background: #28a745;
+    }
+
+    .mini-progress-fill.medium {
+        background: #ffc107;
+    }
+
+    .mini-progress-fill.high {
+        background: #ff9800;
+    }
+
+    .mini-progress-fill.over {
+        background: #dc3545;
+    }
+
+    .rate-text {
+        font-weight: 500;
+        min-width: 50px;
+    }
+
+    .rate-text.over {
+        color: #dc3545;
+    }
+
+    .positive {
+        color: #28a745;
+    }
+
+    .negative {
+        color: #dc3545;
+    }
+
+    .budget-empty-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+
+    .empty-text {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 10px;
+    }
+
+    .empty-subtext {
+        font-size: 14px;
+        color: #999;
+        margin-bottom: 20px;
+    }
+
+    .setup-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .setup-link:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    @media (max-width: 768px) {
+        .budget-overall {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .budget-table {
+            font-size: 12px;
+        }
+
+        .budget-table th,
+        .budget-table td {
+            padding: 8px 6px;
         }
     }
 </style>

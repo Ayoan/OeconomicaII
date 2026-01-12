@@ -81,6 +81,11 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/subscriptions/delete/{id}', [HouseholdController::class, 'deleteSubscription'])->name('subscriptions.delete');
         Route::post('/subscriptions/toggle/{id}', [HouseholdController::class, 'toggleSubscription'])->name('subscriptions.toggle');
 
+        // 予算管理
+        Route::post('/budgets/store', [HouseholdController::class, 'storeBudget'])->name('budgets.store');
+        Route::put('/budgets/update/{id}', [HouseholdController::class, 'updateBudget'])->name('budgets.update');
+        Route::delete('/budgets/delete/{id}', [HouseholdController::class, 'deleteBudget'])->name('budgets.delete');
+
         // カテゴリ管理API
         Route::post('/category/store', [HouseholdController::class, 'storeCategory'])->name('category.store');
         Route::put('/category/update/{id}', [HouseholdController::class, 'updateCategory'])->name('category.update');

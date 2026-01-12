@@ -43,6 +43,10 @@
                 <span class="tab-icon">🔄</span>
                 サブスクリプション管理
             </button>
+            <button class="tab-button" data-tab="budget-tab" onclick="switchTab('budget-tab')">
+                <span class="tab-icon">💰</span>
+                予算管理
+            </button>
         </div>
 
         <!-- カテゴリ管理タブ -->
@@ -219,6 +223,100 @@
             @endif
         </div>
         <!-- サブスクリプション管理タブ終了 -->
+
+        <!-- 予算管理タブ -->
+        <div id="budget-tab" class="tab-content" style="display: none;">
+            <div class="settings-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="card-icon">💰</span>
+                        予算管理
+                    </h2>
+                    <p class="card-subtitle">カテゴリ別に月単位または年単位で予算を設定</p>
+                </div>
+
+                <!-- 予算一覧 -->
+                @if(isset($expenseCategories) && $expenseCategories->count() > 0)
+                    <div class="budget-list">
+                        @foreach($expenseCategories as $category)
+                            @php
+                                $budget = isset($budgets) ? $budgets->get($category->category) : null;
+                            @endphp
+                            <div class="budget-item">
+                                <div class="budget-item-header">
+                                    <div class="category-color" style="background-color: {{ $category->color }}"></div>
+                                    <div class="category-name">{{ $category->category }}</div>
+                                    @if($budget)
+                                        <span class="period-badge {{ $budget->period }}">
+                                            {{ $budget->period_text }}
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <form class="budget-form" onsubmit="saveBudget(event, {{ $budget ? $budget->id : 'null' }}, '{{ $category->category }}')">
+                                    <div class="budget-input-group">
+                                        <label class="budget-label">予算額</label>
+                                        <div class="amount-input-wrapper">
+                                            <span class="currency-symbol">¥</span>
+                                            <input type="text"
+                                                   class="budget-amount-input"
+                                                   name="amount"
+                                                   value="{{ $budget ? number_format($budget->amount) : '' }}"
+                                                   placeholder="0"
+                                                   oninput="formatBudgetAmount(this)">
+                                        </div>
+                                    </div>
+
+                                    <div class="budget-period-group">
+                                        <label class="budget-label">期間</label>
+                                        <div class="period-radio-group">
+                                            <label class="period-radio">
+                                                <input type="radio"
+                                                       name="period_{{ $category->id }}"
+                                                       value="monthly"
+                                                       {{ !$budget || $budget->period === 'monthly' ? 'checked' : '' }}>
+                                                <span class="radio-label">月単位</span>
+                                            </label>
+                                            <label class="period-radio">
+                                                <input type="radio"
+                                                       name="period_{{ $category->id }}"
+                                                       value="yearly"
+                                                       {{ $budget && $budget->period === 'yearly' ? 'checked' : '' }}>
+                                                <span class="radio-label">年単位</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="budget-actions">
+                                        <button type="submit" class="save-budget-btn">
+                                            <span class="btn-icon">💾</span>
+                                            保存
+                                        </button>
+                                        @if($budget)
+                                            <button type="button"
+                                                    class="delete-budget-btn"
+                                                    onclick="deleteBudget(event, {{ $budget->id }}, '{{ $category->category }}')">
+                                                <span class="btn-icon">🗑️</span>
+                                                削除
+                                            </button>
+                                        @endif
+                                    </div>
+                                </form>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <!-- 空状態 -->
+                    <div class="empty-state">
+                        <div class="empty-icon">💰</div>
+                        <p class="empty-text">まだ支出カテゴリが登録されていません</p>
+                        <p class="empty-subtext">カテゴリを追加してから予算を設定してください</p>
+                    </div>
+                @endif
+            </div>
+        </div>
+        <!-- 予算管理タブ終了 -->
+
     </div>
 </div>
 
@@ -1329,6 +1427,215 @@
             font-size: 24px;
         }
     }
+
+    /* ===== 予算管理スタイル ===== */
+    .budget-list {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .budget-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .budget-item:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        border-color: #667eea;
+    }
+
+    .budget-item-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .budget-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 15px;
+        align-items: end;
+    }
+
+    .budget-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .budget-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: #555;
+    }
+
+    .amount-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .currency-symbol {
+        position: absolute;
+        left: 12px;
+        font-size: 16px;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .budget-amount-input {
+        width: 100%;
+        padding: 10px 12px 10px 32px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .budget-amount-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .budget-period-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .period-radio-group {
+        display: flex;
+        gap: 12px;
+    }
+
+    .period-radio {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 8px 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .period-radio:hover {
+        border-color: #667eea;
+        background: #f8f9ff;
+    }
+
+    .period-radio input[type="radio"] {
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .period-radio input[type="radio"]:checked ~ .radio-label {
+        color: #667eea;
+        font-weight: 600;
+    }
+
+    .period-radio:has(input[type="radio"]:checked) {
+        border-color: #667eea;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    }
+
+    .radio-label {
+        font-size: 14px;
+        color: #555;
+        transition: all 0.3s ease;
+    }
+
+    .budget-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .save-budget-btn {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .save-budget-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .delete-budget-btn {
+        padding: 10px 20px;
+        background: white;
+        color: #dc3545;
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+
+    .delete-budget-btn:hover {
+        background: #dc3545;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+    }
+
+    .period-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        color: white;
+    }
+
+    .period-badge.monthly {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .period-badge.yearly {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    @media (max-width: 768px) {
+        .budget-form {
+            grid-template-columns: 1fr;
+        }
+
+        .period-radio-group {
+            flex-direction: row;
+        }
+
+        .budget-actions {
+            flex-direction: column;
+        }
+
+        .save-budget-btn,
+        .delete-budget-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
 </style>
 
 <script>
@@ -1695,6 +2002,8 @@
         const hash = window.location.hash.substring(1);
         if (hash === 'subscription-tab') {
             switchTab('subscription-tab');
+        } else if (hash === 'budget-tab') {
+            switchTab('budget-tab');
         } else {
             // デフォルトはカテゴリ管理タブ
             switchTab('category-tab');
@@ -1900,6 +2209,111 @@
             if (e.target === this) {
                 closeEditSubscriptionModal();
             }
+        });
+    }
+
+    // ===== 予算管理関連 =====
+
+    // 予算金額のフォーマット
+    function formatBudgetAmount(input) {
+        let value = input.value.replace(/,/g, '');
+        if (value === '') return;
+        if (!isNaN(value)) {
+            input.value = Number(value).toLocaleString('ja-JP');
+        }
+    }
+
+    // 予算を保存
+    function saveBudget(event, budgetId, categoryName) {
+        event.preventDefault();
+
+        const form = event.target;
+        const submitBtn = form.querySelector('.save-budget-btn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="btn-icon">⏳</span>保存中...';
+        submitBtn.disabled = true;
+
+        const amountInput = form.querySelector('input[name="amount"]');
+        const amount = amountInput.value.replace(/,/g, '');
+
+        // 期間の取得
+        const periodInputs = form.querySelectorAll('input[type="radio"]:checked');
+        const period = periodInputs.length > 0 ? periodInputs[0].value : 'monthly';
+
+        const data = {
+            category: categoryName,
+            amount: parseInt(amount) || 0,
+            period: period
+        };
+
+        const url = budgetId ? `/household/budgets/update/${budgetId}` : '/household/budgets/store';
+        const method = budgetId ? 'PUT' : 'POST';
+
+        // ヘッダーを構築
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
+        };
+
+        // PUTの場合のみX-HTTP-Method-Overrideを追加
+        if (method === 'PUT') {
+            headers['X-HTTP-Method-Override'] = 'PUT';
+        }
+
+        fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '{{ route("household.settings") }}#budget-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
+        })
+        .finally(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    }
+
+    // 予算を削除
+    function deleteBudget(event, budgetId, categoryName) {
+        event.preventDefault();
+
+        if (!confirm(`「${categoryName}」の予算を削除しますか？`)) {
+            return;
+        }
+
+        fetch(`/household/budgets/delete/${budgetId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-HTTP-Method-Override': 'DELETE'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '{{ route("household.settings") }}#budget-tab';
+                location.reload();
+            } else {
+                alert(data.error || 'エラーが発生しました');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('通信エラーが発生しました');
         });
     }
 </script>

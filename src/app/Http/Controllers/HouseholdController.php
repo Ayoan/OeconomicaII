@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Category;
 use App\Models\Oeconomica;
 use App\Models\Subscription;
+use App\Models\Budget;
 use Carbon\Carbon;
 
 class HouseholdController extends Controller
@@ -273,7 +274,50 @@ class HouseholdController extends Controller
             $expenseColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
             $colorIndex++;
         }
-        
+
+        // 月単位の予算のみ取得
+        $budgets = Budget::where('user_id', $user->id)
+            ->monthly()
+            ->get()
+            ->keyBy('category');
+
+        // 支出カテゴリを取得
+        $expenseCategories = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        // カテゴリごとに予算と実績をまとめる
+        $budgetData = [];
+        $totalBudget = 0;
+        $totalActual = 0;
+
+        foreach ($expenseCategories as $category) {
+            $budget = $budgets->get($category->category);
+
+            if ($budget) { // 月単位予算が設定されているカテゴリのみ
+                $budgetAmount = $budget->amount;
+                $actualAmount = $expenseByCategory->get($category->category, 0);
+
+                $budgetData[] = [
+                    'category' => $category->category,
+                    'color' => $category->color,
+                    'budget' => $budgetAmount,
+                    'actual' => $actualAmount,
+                    'remaining' => $budgetAmount - $actualAmount,
+                    'rate' => $budgetAmount > 0 ? round(($actualAmount / $budgetAmount) * 100, 1) : 0,
+                    'is_over' => $actualAmount > $budgetAmount,
+                ];
+
+                $totalBudget += $budgetAmount;
+                $totalActual += $actualAmount;
+            }
+        }
+
+        $totalRemaining = $totalBudget - $totalActual;
+        $totalRate = $totalBudget > 0 ? round(($totalActual / $totalBudget) * 100, 1) : 0;
+
         return view('household.monthly', compact(
             'targetMonth',
             'incomeByCategory',
@@ -287,7 +331,12 @@ class HouseholdController extends Controller
             'prevTotalIncome',
             'prevTotalExpense',
             'incomeColors',
-            'expenseColors'
+            'expenseColors',
+            'budgetData',
+            'totalBudget',
+            'totalActual',
+            'totalRemaining',
+            'totalRate'
         ));
     }
 
@@ -415,7 +464,53 @@ class HouseholdController extends Controller
             $expenseColors[] = $categoryColors[$category] ?? $defaultColors[$colorIndex % count($defaultColors)];
             $colorIndex++;
         }
-        
+
+        // 全ての予算を取得（月単位・年単位両方）
+        $budgets = Budget::where('user_id', $user->id)
+            ->get()
+            ->keyBy('category');
+
+        // 支出カテゴリを取得
+        $expenseCategories = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        // カテゴリごとに予算と実績をまとめる
+        $budgetData = [];
+        $totalBudget = 0;
+        $totalActual = 0;
+
+        foreach ($expenseCategories as $category) {
+            $budget = $budgets->get($category->category);
+
+            if ($budget) { // 予算が設定されているカテゴリのみ
+                // 月単位予算の場合は*12、年単位はそのまま
+                $budgetAmount = $budget->period === 'monthly' ? $budget->amount * 12 : $budget->amount;
+                $actualAmount = $expenseByCategory->get($category->category, 0);
+
+                $budgetData[] = [
+                    'category' => $category->category,
+                    'color' => $category->color,
+                    'period' => $budget->period_text,
+                    'period_type' => $budget->period,
+                    'monthly_amount' => $budget->period === 'monthly' ? $budget->amount : null,
+                    'budget' => $budgetAmount,
+                    'actual' => $actualAmount,
+                    'remaining' => $budgetAmount - $actualAmount,
+                    'rate' => $budgetAmount > 0 ? round(($actualAmount / $budgetAmount) * 100, 1) : 0,
+                    'is_over' => $actualAmount > $budgetAmount,
+                ];
+
+                $totalBudget += $budgetAmount;
+                $totalActual += $actualAmount;
+            }
+        }
+
+        $totalRemaining = $totalBudget - $totalActual;
+        $totalRate = $totalBudget > 0 ? round(($totalActual / $totalBudget) * 100, 1) : 0;
+
         return view('household.yearly', compact(
             'targetYear',
             'monthlyData',
@@ -439,7 +534,12 @@ class HouseholdController extends Controller
             'maxExpenseMonth',
             'minExpenseMonth',
             'incomeColors',
-            'expenseColors'
+            'expenseColors',
+            'budgetData',
+            'totalBudget',
+            'totalActual',
+            'totalRemaining',
+            'totalRate'
         ));
     }
 
@@ -906,7 +1006,12 @@ class HouseholdController extends Controller
             ->orderBy('day', 'asc')
             ->get();
 
-        return view('household.settings', compact('incomeCategories', 'expenseCategories', 'subscriptions'));
+        // 予算を取得
+        $budgets = Budget::where('user_id', $user->id)
+            ->get()
+            ->keyBy('category');
+
+        return view('household.settings', compact('incomeCategories', 'expenseCategories', 'subscriptions', 'budgets'));
     }
 
     /**
@@ -1235,5 +1340,97 @@ class HouseholdController extends Controller
         }
 
         return back()->with('success', "サブスクリプションを{$status}にしました。");
+    }
+
+    /**
+     * Store or update a budget.
+     */
+    public function storeBudget(Request $request)
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'category' => 'required|string|max:255',
+            'amount' => 'required|integer|min:0',
+            'period' => 'required|in:monthly,yearly',
+        ], [
+            'category.required' => 'カテゴリを選択してください。',
+            'amount.required' => '予算額を入力してください。',
+            'amount.min' => '予算額は0円以上で入力してください。',
+            'period.required' => '期間を選択してください。',
+        ]);
+
+        // カテゴリの所有権確認（支出カテゴリのみ）
+        $categoryExists = Category::where('user_id', $user->id)
+            ->where('type', 'expense')
+            ->where('category', $validated['category'])
+            ->exists();
+
+        if (!$categoryExists) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => '選択されたカテゴリが存在しません。'], 422);
+            }
+            return back()->withErrors(['category' => '選択されたカテゴリが存在しません。']);
+        }
+
+        // 既存の予算があれば更新、なければ作成
+        Budget::updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'category' => $validated['category'],
+            ],
+            [
+                'amount' => $validated['amount'],
+                'period' => $validated['period'],
+            ]
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => '予算を設定しました。']);
+        }
+
+        return back()->with('success', '予算を設定しました。');
+    }
+
+    /**
+     * Update a budget.
+     */
+    public function updateBudget(Request $request, $id)
+    {
+        $user = Auth::user();
+        $budget = Budget::where('user_id', $user->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'amount' => 'required|integer|min:0',
+            'period' => 'required|in:monthly,yearly',
+        ]);
+
+        $budget->update([
+            'amount' => $validated['amount'],
+            'period' => $validated['period'],
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => '予算を更新しました。']);
+        }
+
+        return back()->with('success', '予算を更新しました。');
+    }
+
+    /**
+     * Delete a budget.
+     */
+    public function deleteBudget(Request $request, $id)
+    {
+        $user = Auth::user();
+        $budget = Budget::where('user_id', $user->id)->findOrFail($id);
+
+        $budget->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => '予算を削除しました。']);
+        }
+
+        return back()->with('success', '予算を削除しました。');
     }
 }
