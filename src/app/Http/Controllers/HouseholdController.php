@@ -1011,7 +1011,11 @@ class HouseholdController extends Controller
             ->get()
             ->keyBy('category');
 
-        return view('household.settings', compact('incomeCategories', 'expenseCategories', 'subscriptions', 'budgets'));
+        // 現在の為替レートを取得
+        $exchangeRateService = app(\App\Services\ExchangeRateService::class);
+        $currentExchangeRate = $exchangeRateService->getUsdToJpyRate();
+
+        return view('household.settings', compact('incomeCategories', 'expenseCategories', 'subscriptions', 'budgets', 'currentExchangeRate'));
     }
 
     /**
@@ -1225,12 +1229,15 @@ class HouseholdController extends Controller
             'subscription' => 'required|string|max:255',
             'category' => 'required|string|max:255',
             'amount' => 'required|numeric|min:1',
+            'currency' => 'required|in:JPY,USD',
             'day' => 'required|integer|min:1|max:31',
         ], [
             'subscription.required' => 'サブスクリプション名を入力してください。',
             'category.required' => 'カテゴリを選択してください。',
             'amount.required' => '金額を入力してください。',
-            'amount.min' => '金額は1円以上で入力してください。',
+            'amount.min' => '金額は1以上で入力してください。',
+            'currency.required' => '通貨を選択してください。',
+            'currency.in' => '通貨はJPYまたはUSDを選択してください。',
             'day.required' => '実行日を選択してください。',
             'day.min' => '実行日は1日以上で指定してください。',
             'day.max' => '実行日は31日以下で指定してください。',
@@ -1254,6 +1261,7 @@ class HouseholdController extends Controller
             'subscription' => $validated['subscription'],
             'category' => $validated['category'],
             'amount' => $validated['amount'],
+            'currency' => $validated['currency'],
             'day' => $validated['day'],
             'is_active' => true,
         ]);
@@ -1277,6 +1285,7 @@ class HouseholdController extends Controller
             'subscription' => 'required|string|max:255',
             'category' => 'required|string|max:255',
             'amount' => 'required|numeric|min:1',
+            'currency' => 'required|in:JPY,USD',
             'day' => 'required|integer|min:1|max:31',
         ]);
 

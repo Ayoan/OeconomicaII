@@ -40,15 +40,35 @@ class ExecuteSubscriptions extends Command
         $executedCount = 0;
         $errorCount = 0;
 
+        // 為替レートサービスを取得
+        $exchangeRateService = app(\App\Services\ExchangeRateService::class);
+
+        // 為替レート表示（USDサブスクリプションがある場合のみ）
+        $hasUsd = $subscriptions->contains('currency', 'USD');
+        if ($hasUsd) {
+            $rate = $exchangeRateService->getUsdToJpyRate();
+            $this->info("現在の為替レート: 1 USD = {$rate} JPY");
+        }
+
         foreach ($subscriptions as $subscription) {
             try {
-                // 収支データを作成（支出として登録）
+                // 円換算の金額を取得
+                $jpyAmount = $subscription->jpy_amount;
+
+                // メモを生成
+                $memo = '定期: ' . $subscription->subscription;
+                // USDの場合は為替情報を追加
+                if ($subscription->currency === 'USD') {
+                    $memo .= " ({$subscription->formatted_amount})";
+                }
+
+                // 収支データを作成（円で登録）
                 Oeconomica::create([
                     'user_id' => $subscription->user_id,
                     'balance' => 'expense', // サブスクリプションは支出
                     'category' => $subscription->category,
-                    'amount' => $subscription->amount,
-                    'memo' => '定期: ' . $subscription->subscription,
+                    'amount' => $jpyAmount,
+                    'memo' => $memo,
                     'date' => $today,
                 ]);
 
@@ -56,11 +76,13 @@ class ExecuteSubscriptions extends Command
                 $subscription->update(['payday' => $today]);
 
                 $executedCount++;
-                $this->info("✓ 実行完了: {$subscription->subscription} (ユーザーID: {$subscription->user_id})");
+                $this->info("✓ 実行完了: {$subscription->subscription} ({$subscription->formatted_amount} → ¥" . number_format($jpyAmount) . ")");
 
                 Log::info("サブスクリプション実行: {$subscription->subscription}", [
                     'user_id' => $subscription->user_id,
-                    'amount' => $subscription->amount,
+                    'original_amount' => $subscription->amount,
+                    'currency' => $subscription->currency,
+                    'jpy_amount' => $jpyAmount,
                     'category' => $subscription->category,
                 ]);
 

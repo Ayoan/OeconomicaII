@@ -143,6 +143,15 @@
 
         <!-- サブスクリプション管理タブ -->
         <div id="subscription-tab" class="tab-content" style="display: none;">
+            <!-- 為替レート表示 -->
+            <div class="exchange-rate-card">
+                <div class="exchange-rate-info">
+                    <span class="exchange-rate-label">💱 現在の為替レート:</span>
+                    <span class="exchange-rate-value">1 USD = ¥{{ number_format($currentExchangeRate, 2) }}</span>
+                    <span class="exchange-rate-note">（自動取得・1時間ごとに更新）</span>
+                </div>
+            </div>
+
             <!-- 追加ボタン -->
             <div class="add-button-container">
                 <button class="add-btn-subscription" onclick="openAddSubscriptionModal()">
@@ -158,6 +167,9 @@
                         <div class="subscription-card {{ $subscription->is_active ? 'active' : 'inactive' }}">
                             <div class="subscription-header">
                                 <h3 class="subscription-name">{{ $subscription->subscription }}</h3>
+                                <span class="currency-badge {{ strtolower($subscription->currency) }}">
+                                    {{ $subscription->currency }}
+                                </span>
                                 <div class="toggle-container">
                                     <label class="toggle-switch {{ $subscription->is_active ? 'active' : '' }}"
                                            onclick="toggleSubscription({{ $subscription->id }}, this)">
@@ -168,8 +180,15 @@
 
                             <div class="subscription-body">
                                 <div class="subscription-amount">
-                                    ¥{{ number_format($subscription->amount) }}
+                                    {{ $subscription->formatted_amount }}
                                 </div>
+
+                                @if($subscription->currency === 'USD')
+                                <div class="exchange-info-card">
+                                    <span class="detail-label">円換算:</span>
+                                    <span class="detail-value">約¥{{ number_format($subscription->jpy_amount) }}</span>
+                                </div>
+                                @endif
 
                                 <div class="subscription-details">
                                     <div class="detail-item">
@@ -198,7 +217,7 @@
 
                             <div class="subscription-footer">
                                 <button class="action-btn-sub edit-btn-sub"
-                                        onclick="openEditSubscriptionModal({{ $subscription->id }}, '{{ $subscription->subscription }}', '{{ $subscription->category }}', {{ $subscription->amount }}, {{ $subscription->day }})">
+                                        onclick="openEditSubscriptionModal({{ $subscription->id }}, '{{ $subscription->subscription }}', '{{ $subscription->category }}', {{ $subscription->amount }}, {{ $subscription->day }}, '{{ $subscription->currency }}')">
                                     <span>✏️</span> 編集
                                 </button>
                                 <button class="action-btn-sub delete-btn-sub"
@@ -492,13 +511,25 @@
             </div>
 
             <div class="form-group">
-                <label for="add-subscription-amount" class="form-label">金額（円）</label>
-                <input type="text"
-                       id="add-subscription-amount"
-                       name="amount"
-                       class="form-input"
-                       placeholder="0"
-                       required>
+                <label for="add-subscription-amount" class="form-label">金額</label>
+                <div class="amount-currency-group">
+                    <input type="number"
+                           id="add-subscription-amount"
+                           name="amount"
+                           class="form-input amount-input"
+                           placeholder="0"
+                           step="0.01"
+                           min="1"
+                           required>
+
+                    <select id="add-subscription-currency"
+                            name="currency"
+                            class="form-select currency-select"
+                            required>
+                        <option value="JPY">円 (¥)</option>
+                        <option value="USD">ドル ($)</option>
+                    </select>
+                </div>
             </div>
 
             <div class="modal-actions">
@@ -562,12 +593,24 @@
             </div>
 
             <div class="form-group">
-                <label for="edit-subscription-amount" class="form-label">金額（円）</label>
-                <input type="text"
-                       id="edit-subscription-amount"
-                       name="amount"
-                       class="form-input"
-                       required>
+                <label for="edit-subscription-amount" class="form-label">金額</label>
+                <div class="amount-currency-group">
+                    <input type="number"
+                           id="edit-subscription-amount"
+                           name="amount"
+                           class="form-input amount-input"
+                           step="0.01"
+                           min="1"
+                           required>
+
+                    <select id="edit-subscription-currency"
+                            name="currency"
+                            class="form-select currency-select"
+                            required>
+                        <option value="JPY">円 (¥)</option>
+                        <option value="USD">ドル ($)</option>
+                    </select>
+                </div>
             </div>
 
             <div class="modal-actions">
@@ -1170,6 +1213,88 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 10px;
+    }
+
+    /* 為替レート表示 */
+    .exchange-rate-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .exchange-rate-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: white;
+    }
+
+    .exchange-rate-label {
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    .exchange-rate-value {
+        font-weight: 600;
+        font-size: 18px;
+    }
+
+    .exchange-rate-note {
+        font-size: 12px;
+        opacity: 0.9;
+    }
+
+    /* 通貨バッジ */
+    .currency-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: white;
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .currency-badge.jpy {
+        background: rgba(40, 167, 69, 0.8);
+    }
+
+    .currency-badge.usd {
+        background: rgba(0, 123, 255, 0.8);
+    }
+
+    /* 金額と通貨選択 */
+    .amount-currency-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    .amount-input {
+        flex: 2;
+    }
+
+    .currency-select {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    /* 円換算情報 */
+    .exchange-info-card {
+        background: #f8f9fa;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .exchange-info-card .detail-value {
+        color: #667eea;
+        font-weight: 600;
     }
 
     .subscription-name {
@@ -2029,12 +2154,13 @@
         document.getElementById('addSubscriptionForm').reset();
     }
 
-    function openEditSubscriptionModal(id, subscription, category, amount, day) {
+    function openEditSubscriptionModal(id, subscription, category, amount, day, currency) {
         document.getElementById('edit-subscription-id').value = id;
         document.getElementById('edit-subscription-name').value = subscription;
         document.getElementById('edit-subscription-category').value = category;
-        document.getElementById('edit-subscription-amount').value = parseInt(amount).toLocaleString();
+        document.getElementById('edit-subscription-amount').value = amount;
         document.getElementById('edit-subscription-day').value = day;
+        document.getElementById('edit-subscription-currency').value = currency || 'JPY';
 
         document.getElementById('editSubscriptionModal').style.display = 'block';
         document.body.style.overflow = 'hidden';

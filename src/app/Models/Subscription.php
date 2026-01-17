@@ -13,6 +13,7 @@ class Subscription extends Model
         'category',
         'subscription',
         'amount',
+        'currency',
         'is_active',
         'payday',
     ];
@@ -84,5 +85,45 @@ class Subscription extends Model
     public function getExecutionDayTextAttribute()
     {
         return "毎月{$this->day}日";
+    }
+
+    /**
+     * 円換算の金額を取得
+     *
+     * @return int
+     */
+    public function getJpyAmountAttribute(): int
+    {
+        if ($this->currency === 'JPY') {
+            return (int) $this->amount;
+        }
+
+        // USDの場合は為替レートで変換
+        $exchangeRateService = app(\App\Services\ExchangeRateService::class);
+        return $exchangeRateService->convertUsdToJpy($this->amount);
+    }
+
+    /**
+     * 通貨記号を取得
+     *
+     * @return string
+     */
+    public function getCurrencySymbolAttribute(): string
+    {
+        return $this->currency === 'JPY' ? '¥' : '$';
+    }
+
+    /**
+     * 表示用の金額（通貨記号付き）
+     *
+     * @return string
+     */
+    public function getFormattedAmountAttribute(): string
+    {
+        if ($this->currency === 'JPY') {
+            return '¥' . number_format($this->amount);
+        } else {
+            return '$' . number_format($this->amount, 2);
+        }
     }
 }
