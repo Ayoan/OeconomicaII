@@ -63,6 +63,8 @@ Oeconomica IIは、収入と支出を記録し、月次・年次でビジュア�
 - **フロントエンド**: Blade Templates, Tailwind CSS, Chart.js
 - **データベース**: MySQL 8.0
 - **インフラ**: Docker, Docker Compose, Nginx
+- **プロセス管理**: Supervisor（PHP-FPM + cron の並行実行）
+- **タイムゾーン**: Asia/Tokyo（日本時間）
 
 ## 必要要件
 
@@ -196,6 +198,27 @@ docker exec Oeconomica_app php artisan view:clear
 
 ```bash
 docker exec Oeconomica_app tail -f storage/logs/laravel.log
+```
+
+### Supervisorの状態確認
+
+PHPコンテナ内ではSupervisorがPHP-FPMとcronを管理しています。
+
+```bash
+# プロセスの状態確認
+docker exec Oeconomica_app supervisorctl status
+
+# 期待される出力:
+# cron                             RUNNING   pid XX, uptime X:XX:XX
+# php-fpm                          RUNNING   pid XX, uptime X:XX:XX
+```
+
+### タイムゾーンの確認
+
+コンテナは日本時間（Asia/Tokyo）に設定されています。
+
+```bash
+docker exec Oeconomica_app date
 ```
 
 ### サブスクリプションの手動実行
