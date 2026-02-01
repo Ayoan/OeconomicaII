@@ -1,1 +1,2 @@
-0 6 * * * root cd /var/www/html && php artisan schedule:run >> /var/log/laravel-scheduler.log 2>&1
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 0 * * * root cd /var/www/html && /usr/local/bin/php artisan schedule:run >> /var/log/laravel-scheduler.log 2>&1
