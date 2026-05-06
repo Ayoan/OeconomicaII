@@ -2136,13 +2136,6 @@
     });
 
     // サブスクリプション関連の関数
-    function formatSubscriptionAmount(input) {
-        let value = input.value.replace(/[^\d]/g, '');
-        if (value) {
-            input.value = parseInt(value).toLocaleString();
-        }
-    }
-
     function openAddSubscriptionModal() {
         document.getElementById('addSubscriptionModal').style.display = 'block';
         document.body.style.overflow = 'hidden';
@@ -2301,21 +2294,6 @@
         .catch(error => {
             console.error('Error:', error);
             alert('通信エラーが発生しました');
-        });
-    }
-
-    // 金額フォーマットイベント（サブスクリプション用）
-    const addSubAmount = document.getElementById('add-subscription-amount');
-    if (addSubAmount) {
-        addSubAmount.addEventListener('input', function() {
-            formatSubscriptionAmount(this);
-        });
-    }
-
-    const editSubAmount = document.getElementById('edit-subscription-amount');
-    if (editSubAmount) {
-        editSubAmount.addEventListener('input', function() {
-            formatSubscriptionAmount(this);
         });
     }
 
