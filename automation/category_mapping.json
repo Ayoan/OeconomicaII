@@ -1,0 +1,8 @@
+{
+  "text_contains_mappings": [
+    { "keyword": "京都生活協同組合", "category": "食費" },
+    { "keyword": "アマゾンチヨウ", "category": "書籍" },
+    { "keyword": "セブン-イレブン", "category": "日用品" }
+  ],
+  "default_category": "不明"
+}

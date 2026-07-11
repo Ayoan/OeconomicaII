@@ -1,0 +1,35 @@
+{
+  "ENVIRONMENT": {
+    "HOME_SERVER_URL": "http://localhost:xxxx",
+    "EXECUTION_TIME": "12:00"
+  },
+  "DATA_SOURCES": {
+    "SUICA_TSV_PATH": "path/to/suica.tsv"
+  },
+  "LINE_BOT_CONFIG": {
+    "CHANNEL_ACCESS_TOKEN": "YOUR_LINE_ACCESS_TOKEN",
+    "USER_ID": "YOUR_LINE_USER_ID"
+  },
+  "CREDIT_CARDS": {
+    "E_NAVI": {
+      "LOGIN_URL": "https://...",
+      "USER_ID": "user_id_here",
+      "PASSWORD": "password_here",
+      "XPATH_USERNAME_INPUT": "//*[@id='...']",
+      "XPATH_PASSWORD_INPUT": "//*[@id='...']",
+      "XPATH_LOGIN_BUTTON": "//*[@id='...']",
+      "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
+      "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']"
+    },
+    "SMBC": {
+      "LOGIN_URL": "https://...",
+      "USER_ID": "user_id_here",
+      "PASSWORD": "password_here",
+      "XPATH_USERNAME_INPUT": "//*[@id='...']",
+      "XPATH_PASSWORD_INPUT": "//*[@id='...']",
+      "XPATH_LOGIN_BUTTON": "//*[@id='...']",
+      "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
+      "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']"
+    }
+  }
+}
