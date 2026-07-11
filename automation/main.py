@@ -114,7 +114,16 @@ def register_records(user_id, to_insert):
 
 
 def notify_summary(config, inserted, errors, skipped_sources=None):
-    """実行結果サマリをLINEへ通知する。送信自体の失敗はパイプラインを止めない"""
+    """実行結果サマリをLINEへ通知する
+
+    新規登録0件・エラーなし・取得失敗なし（＝何も起きなかった）場合は通知しない。
+    登録0件でもエラーやスクレイピング失敗があれば通知する。
+    送信自体の失敗はパイプラインを止めない。
+    """
+    if inserted == 0 and not errors and not skipped_sources:
+        print("新規登録・エラーともになし。LINE通知はスキップします。")
+        return
+
     message = build_summary_message(inserted, errors, skipped_sources)
     try:
         send_line_message(message, config)

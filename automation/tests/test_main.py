@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import register_records, run_pipeline  # noqa: E402
+from main import notify_summary, register_records, run_pipeline  # noqa: E402
 
 FIELDNAMES = ['日付', '収支区分', 'カテゴリ', '金額', 'メモ']
 
@@ -122,3 +122,33 @@ def test_register_records_excludes_invalid_records_from_insert(mock_ensure, mock
     assert len(inserted_records) == 1
     assert result['inserted'] == 1
     assert len(result['errors']) == 1
+
+
+@patch('main.send_line_message')
+def test_notify_summary_skips_when_nothing_happened(mock_send):
+    notify_summary({}, inserted=0, errors=[], skipped_sources=[])
+    mock_send.assert_not_called()
+
+
+@patch('main.send_line_message')
+def test_notify_summary_sends_when_records_inserted(mock_send):
+    notify_summary({}, inserted=3, errors=[], skipped_sources=[])
+    mock_send.assert_called_once()
+
+
+@patch('main.send_line_message')
+def test_notify_summary_sends_when_errors_present_even_if_zero_inserted(mock_send):
+    notify_summary({}, inserted=0, errors=['カテゴリ不正'], skipped_sources=[])
+    mock_send.assert_called_once()
+
+
+@patch('main.send_line_message')
+def test_notify_summary_sends_when_sources_skipped_even_if_zero_inserted(mock_send):
+    notify_summary({}, inserted=0, errors=[], skipped_sources=['e-navi'])
+    mock_send.assert_called_once()
+
+
+@patch('main.send_line_message')
+def test_notify_summary_does_not_raise_when_send_fails(mock_send):
+    mock_send.side_effect = RuntimeError('network error')
+    notify_summary({}, inserted=1, errors=[], skipped_sources=[])  # 例外が伝播しないこと
