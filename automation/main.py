@@ -14,6 +14,8 @@ import csv
 import glob
 import json
 import os
+import shutil
+from datetime import datetime
 
 from category_mapper import apply_category_mapping, load_category_mapping
 from dedup import dedup_against_db, get_date_range
@@ -30,6 +32,32 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, 'config.json')
 DEFAULT_MAPPING_PATH = os.path.join(SCRIPT_DIR, 'category_mapping.json')
 DEFAULT_FORMATTED_GLOB = os.path.join(SCRIPT_DIR, 'formatters', 'datas', '*_formatted.csv')
+PROCESSED_DIR = os.path.join(SCRIPT_DIR, 'formatters', 'datas', 'processed')
+
+
+def archive_processed_csv(csv_paths, user_id, processed_dir=PROCESSED_DIR):
+    """処理済みの整形CSVを formatters/datas/processed/ へ退避する
+
+    formatters/datas/ 直下に処理済みファイルを置いたままにすると、次回実行時に
+    別アカウント向けの処理が glob で誤って拾ってしまい、アカウント間でデータが
+    混同する（2026-07-12、本番環境でSMBC(family)向けCSVがe-navi(naoya)実行時に
+    誤登録される事故が実際に発生）。退避先ファイル名には user_id と時刻を付与し
+    衝突を避ける。削除ではなく退避に留めるのは、将来 category_mapping.json の
+    キーワードルールを拡充する際の実データとして再利用するため。
+
+    Args:
+        csv_paths (list[str]): run_pipeline() に渡した整形済みCSVファイルパスのリスト
+        user_id: OeconomicaII のユーザーID（退避先ファイル名の衝突回避に使う）
+        processed_dir (str): 退避先ディレクトリ（テスト時の差し替え用）
+    """
+    os.makedirs(processed_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%H%M%S')
+    for path in csv_paths:
+        if not os.path.exists(path):
+            continue
+        name, ext = os.path.splitext(os.path.basename(path))
+        dest = os.path.join(processed_dir, f'{name}_user{user_id}_{timestamp}{ext}')
+        shutil.move(path, dest)
 
 
 def load_formatted_records(csv_paths):
@@ -173,6 +201,7 @@ def main():
                 except Exception as notify_exc:
                     print(f"LINE通知に失敗しました（処理は継続します）: {notify_exc}")
 
+    used_default_glob = not args.csv
     csv_paths = args.csv if args.csv else sorted(glob.glob(DEFAULT_FORMATTED_GLOB))
     if not csv_paths:
         print("整形済みCSVが見つかりません。先に formatters/ 配下の各スクリプトを実行してください。")
@@ -187,6 +216,11 @@ def main():
         print(f"バリデーションエラー: {len(result['errors'])}件")
         for error in result['errors']:
             print(f"  - {error}")
+
+    # formatters/datas/ 直下の自動検出分のみ退避する（--csv 明示指定時は
+    # 呼び出し側の管理下にあるファイルのため移動しない）
+    if used_default_glob:
+        archive_processed_csv(csv_paths, args.user_id)
 
     notify_summary(config, result['inserted'], result['errors'], skipped_sources)
 

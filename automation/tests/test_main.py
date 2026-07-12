@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import main, notify_summary, register_records, run_pipeline  # noqa: E402
+from main import archive_processed_csv, main, notify_summary, register_records, run_pipeline  # noqa: E402
 
 FIELDNAMES = ['日付', '収支区分', 'カテゴリ', '金額', 'メモ']
 
@@ -172,6 +172,84 @@ def test_main_scrape_formats_enavi_csv_after_successful_scraping(mock_run_scrape
     main()
 
     mock_format_rakuten.assert_called_once()
+
+
+def test_archive_processed_csv_moves_files_with_user_id_suffix(tmp_path):
+    processed_dir = tmp_path / 'processed'
+    csv_path = tmp_path / 'enavi_20260712_formatted.csv'
+    csv_path.write_text('日付,収支区分,カテゴリ,金額,メモ\n')
+
+    archive_processed_csv([str(csv_path)], user_id=2, processed_dir=str(processed_dir))
+
+    assert not csv_path.exists()
+    moved = list(processed_dir.glob('enavi_20260712_formatted_user2_*.csv'))
+    assert len(moved) == 1
+
+
+def test_archive_processed_csv_ignores_missing_files(tmp_path):
+    processed_dir = tmp_path / 'processed'
+
+    archive_processed_csv([str(tmp_path / 'does_not_exist.csv')], user_id=2, processed_dir=str(processed_dir))
+    # 例外が伝播しないこと
+
+
+@patch('main.insert_records')
+@patch('main.get_categories')
+@patch('main.ensure_category_exists')
+@patch('main.archive_processed_csv')
+@patch('main.fetch_existing_records')
+def test_main_archives_csv_found_via_default_glob(mock_fetch, mock_archive, mock_ensure, mock_get_categories,
+                                                    mock_insert, tmp_path, monkeypatch):
+    mock_fetch.return_value = []
+    mock_get_categories.return_value = {'income': [], 'expense': ['不明']}
+    mock_insert.return_value = 1
+
+    csv_path = tmp_path / 'enavi_20260712_formatted.csv'
+    _write_formatted_csv(csv_path, [
+        {'日付': '2026-07-05', '収支区分': '支出', 'カテゴリ': '不明', '金額': '100', 'メモ': 'テスト'},
+    ])
+    config_path = tmp_path / 'config.json'
+    _write_config(config_path)
+
+    monkeypatch.setattr(sys, 'argv', ['main.py', '--user-id', '2', '--config', str(config_path)])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [str(csv_path)])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_archive.assert_called_once_with([str(csv_path)], 2)
+
+
+@patch('main.insert_records')
+@patch('main.get_categories')
+@patch('main.ensure_category_exists')
+@patch('main.archive_processed_csv')
+@patch('main.fetch_existing_records')
+def test_main_archives_default_glob_csv_but_not_explicit_csv(mock_fetch, mock_archive, mock_ensure,
+                                                               mock_get_categories, mock_insert,
+                                                               tmp_path, monkeypatch):
+    """formatters/datas/直下の自動検出分は処理後に退避されるが、--csvで明示指定
+    したファイルは呼び出し側の管理下にあるため退避しないこと
+    (2026-07-12、本番環境でアカウント間のデータ混同事故が発生したため導入)"""
+    mock_fetch.return_value = []
+    mock_get_categories.return_value = {'income': [], 'expense': ['不明']}
+    mock_insert.return_value = 1
+
+    csv_path = tmp_path / 'smbc_email_20260712_formatted.csv'
+    _write_formatted_csv(csv_path, [
+        {'日付': '2026-07-05', '収支区分': '支出', 'カテゴリ': '不明', '金額': '100', 'メモ': 'テスト'},
+    ])
+    config_path = tmp_path / 'config.json'
+    _write_config(config_path)
+
+    monkeypatch.setattr(sys, 'argv', [
+        'main.py', '--user-id', '3', '--csv', str(csv_path), '--config', str(config_path),
+    ])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_archive.assert_not_called()
 
 
 @patch('formatters.format_rakuten_csv.format_rakuten_csv')
