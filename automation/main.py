@@ -146,10 +146,11 @@ def main():
 
     skipped_sources = []
     if args.scrape:
+        from scrapers.driver_factory import build_driver_factory
         from scrapers.run_scrapers import run_all_scrapers
-        from selenium import webdriver
 
-        skipped_sources = run_all_scrapers(config, driver_factory=webdriver.Chrome)
+        driver_factory = build_driver_factory(config.get('SCRAPER_CONFIG'))
+        skipped_sources = run_all_scrapers(config, driver_factory=driver_factory)
 
         if 'e-navi' not in skipped_sources and config.get('CREDIT_CARDS', {}).get('E_NAVI'):
             from formatters.format_rakuten_csv import format_rakuten_csv

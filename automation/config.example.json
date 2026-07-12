@@ -10,6 +10,11 @@
     "CHANNEL_ACCESS_TOKEN": "YOUR_LINE_ACCESS_TOKEN",
     "USER_ID": "YOUR_LINE_USER_ID"
   },
+  "SCRAPER_CONFIG": {
+    "CHROME_BINARY": "/snap/bin/chromium",
+    "DOWNLOAD_DIR": "/path/to/automation/formatters/datas",
+    "HEADLESS": true
+  },
   "CREDIT_CARDS": {
     "E_NAVI": {
       "LOGIN_URL": "https://...",
