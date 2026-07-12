@@ -160,6 +160,56 @@ def test_no_pre_login_click_delay_by_default():
     assert mock_sleep.call_count == 1
 
 
+@patch('scrapers.base_scraper.time.sleep')
+def test_post_page_load_delay_waits_after_login_url_navigation(mock_sleep):
+    """SPAのJS初期化(イベントハンドラ登録等)が完了する前に要素を操作すると
+    フォーム送信が失敗してログイン画面に戻される事象が実際に発生したため
+    (e-navi、2026-07-12)、POST_PAGE_LOAD_DELAY_SECONDS設定時はLOGIN_URL
+    遷移直後に待機すること"""
+    config = dict(CARD_CONFIG, POST_PAGE_LOAD_DELAY_SECONDS=2)
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver)
+
+    scraper.download_csv()
+
+    mock_sleep.assert_any_call(2)
+
+
+@patch('scrapers.base_scraper.time.sleep')
+def test_post_page_load_delay_waits_after_two_step_login_next_click(mock_sleep):
+    config = dict(TWO_STEP_CARD_CONFIG, POST_PAGE_LOAD_DELAY_SECONDS=2)
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver)
+
+    scraper.download_csv()
+
+    # LOGIN_URL遷移後・次へボタンクリック後の2回待機すること
+    assert mock_sleep.call_args_list.count(((2,),)) == 2
+
+
+@patch('scrapers.base_scraper.time.sleep')
+def test_post_page_load_delay_waits_after_statement_url_navigation(mock_sleep):
+    config = dict(CARD_CONFIG, STATEMENT_URL='https://example.com/statement', POST_PAGE_LOAD_DELAY_SECONDS=2)
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver)
+
+    scraper.download_csv()
+
+    # LOGIN_URL遷移後・STATEMENT_URL遷移後の2回待機すること
+    assert mock_sleep.call_args_list.count(((2,),)) == 2
+
+
+def test_no_post_page_load_delay_by_default():
+    driver = _make_driver()
+    scraper = BaseScraper(CARD_CONFIG, driver_factory=lambda: driver)  # POST_PAGE_LOAD_DELAY_SECONDS未設定
+
+    with patch('scrapers.base_scraper.time.sleep') as mock_sleep:
+        scraper.download_csv()
+
+    # _wait_for_download()分の呼び出しのみで、ページ遷移後の待機は発生しないこと
+    assert mock_sleep.call_count == 1
+
+
 def test_one_step_login_does_not_look_for_next_button():
     driver = _make_driver()
     scraper = BaseScraper(CARD_CONFIG, driver_factory=lambda: driver)  # XPATH_NEXT_BUTTON未設定

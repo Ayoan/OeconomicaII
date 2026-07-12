@@ -114,6 +114,7 @@ class BaseScraper:
         driver = self.driver_factory()
         try:
             driver.get(self.card_config['LOGIN_URL'])
+            self._wait_after_page_transition()
             self._login(driver)
 
             menu_link_xpath = self.card_config.get('XPATH_STATEMENT_MENU_LINK')
@@ -129,6 +130,7 @@ class BaseScraper:
                     # 認証済みセッション内での同一ドメインへの直接遷移のため、
                     # メニュー展開等のクリック操作より壊れにくい
                     driver.get(statement_url)
+                    self._wait_after_page_transition()
 
             self._download_all_statements(driver)
         finally:
@@ -200,6 +202,19 @@ class BaseScraper:
         wait_seconds = self.card_config.get('DOWNLOAD_WAIT_SECONDS', DEFAULT_DOWNLOAD_WAIT_SECONDS)
         time.sleep(wait_seconds)
 
+    def _wait_after_page_transition(self):
+        """ページ遷移直後、SPAのJS初期化（イベントハンドラ登録等）を待つ
+
+        WebDriverWait(element_to_be_clickable)はDOM上の表示・有効状態しか
+        保証しないため、SPAの初期化が完了する前に要素を操作してしまい、
+        フォーム送信が失敗してログイン画面に戻される事象が実際に発生した
+        (e-navi、2026-07-12)。POST_PAGE_LOAD_DELAY_SECONDS が設定されていれば
+        ページ遷移直後にその秒数だけ待機する（未設定時は待機しない）。
+        """
+        delay = self.card_config.get('POST_PAGE_LOAD_DELAY_SECONDS', 0)
+        if delay:
+            time.sleep(delay)
+
     def _select_statement_month(self, driver, offset_months):
         """「お支払い月」等のプルダウンで対象月を選択し、照会ボタンを押す
 
@@ -234,6 +249,7 @@ class BaseScraper:
         if next_button_xpath:
             # 2段階ログイン方式（ID入力 → 次へ → 別画面でパスワード入力）
             self._click(driver, next_button_xpath)
+            self._wait_after_page_transition()
 
         self._fill(driver, self.card_config['XPATH_PASSWORD_INPUT'], self.card_config['PASSWORD'])
 

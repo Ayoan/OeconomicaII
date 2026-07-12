@@ -26,6 +26,7 @@
       "XPATH_PASSWORD_INPUT": "//*[@id='...']",
       "XPATH_LOGIN_BUTTON": "//*[@id='...']",
       "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
+      "POST_PAGE_LOAD_DELAY_SECONDS": 2,
       "STATEMENT_URL": "https://...",
       "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']",
       "XPATH_NEXT_MONTH_BUTTON": "//*[@id='...']",
