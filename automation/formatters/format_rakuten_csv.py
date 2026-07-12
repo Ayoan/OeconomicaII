@@ -9,6 +9,8 @@
 import csv
 import glob
 import os
+import shutil
+from datetime import datetime
 
 from csv_formatter_common import (
     zenkaku_to_hankaku,
@@ -22,12 +24,19 @@ from csv_formatter_common import (
 
 
 def format_rakuten_csv():
-    """楽天カードのWeb明細CSVを家計簿アプリ用形式に整形"""
+    """楽天カードのWeb明細CSVを家計簿アプリ用形式に整形
+
+    処理済みの生CSVは formatters/datas/processed/ へ退避する。ブラウザの
+    重複ダウンロード時のファイル名連番付与(例: enavi(1).csv)により
+    formatters/datas/ 直下に古いファイルが溜まり続け、次回実行時に
+    'enavi*.csv' の glob が最新でないファイルを拾ってしまう事故を防ぐため
+    (2026-07-12、本番環境での実機検証で確認)。
+    """
 
     # スクリプトのディレクトリを取得
     script_dir = get_script_directory()
 
-    # 入力ファイルの検索
+    # 入力ファイルの検索（複数ある場合は最終更新が最新のものを使う）
     input_pattern = os.path.join(script_dir, 'datas', 'enavi*.csv')
     input_files = glob.glob(input_pattern)
 
@@ -37,9 +46,9 @@ def format_rakuten_csv():
         return
 
     if len(input_files) > 1:
-        print(f"警告: 複数のファイルが見つかりました。最初のファイルを処理します")
+        print(f"警告: 複数のファイルが見つかりました。最終更新が最新のファイルを処理します")
 
-    input_file = input_files[0]
+    input_file = max(input_files, key=os.path.getmtime)
     print(f"処理対象ファイル: {os.path.basename(input_file)}")
 
     # 出力ファイル名の生成
@@ -85,6 +94,14 @@ def format_rakuten_csv():
 
     # 整形後のCSVファイルを書き込み
     write_formatted_csv(output_file, formatted_data)
+
+    # 処理済みの生CSV(未処理分・重複ダウンロード分も含め全て)をprocessed/へ退避する
+    processed_dir = os.path.join(script_dir, 'datas', 'processed')
+    os.makedirs(processed_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%H%M%S')
+    for i, raw_file in enumerate(input_files):
+        name, ext = os.path.splitext(os.path.basename(raw_file))
+        shutil.move(raw_file, os.path.join(processed_dir, f'{name}_{timestamp}_{i}{ext}'))
 
     print(f"\n整形完了!")
     print(f"出力ファイル: {os.path.basename(output_file)}")
