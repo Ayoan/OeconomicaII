@@ -33,6 +33,9 @@ def zenkaku_to_hankaku(text):
         # 全角スペース
         elif code == 0x3000:
             result.append(' ')
+        # 全角マイナス記号(U+2212)。0xFF01-0xFF5Eの範囲外だが店舗名等に頻出するため個別対応
+        elif code == 0x2212:
+            result.append('-')
         else:
             result.append(char)
 

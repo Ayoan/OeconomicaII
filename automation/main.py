@@ -23,7 +23,7 @@ from db.repository import (
     get_categories,
     insert_records,
 )
-from notify.line_bot import build_summary_message, send_line_message
+from notify.line_bot import build_structure_error_message, build_summary_message, send_line_message
 from validation import BALANCE_JA_TO_TYPE, validate_records
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -138,6 +138,7 @@ def main():
     parser.add_argument('--config', default=DEFAULT_CONFIG_PATH)
     parser.add_argument('--mapping', default=DEFAULT_MAPPING_PATH)
     parser.add_argument('--scrape', action='store_true', help='実行前にクレカサイトのスクレイピングを行う（要selenium・chromedriver）')
+    parser.add_argument('--email', action='store_true', help='実行前にSMBCカードのご利用通知メール（IMAP）を取得・整形する')
     args = parser.parse_args()
 
     with open(args.config, 'r', encoding='utf-8') as f:
@@ -149,6 +150,22 @@ def main():
         from selenium import webdriver
 
         skipped_sources = run_all_scrapers(config, driver_factory=webdriver.Chrome)
+
+    if args.email:
+        email_config = config.get('EMAIL_SOURCES', {}).get('SMBC_NOTIFICATION')
+        if email_config:
+            from email_fetcher.imap_client import EmailFetchError
+            from formatters.format_smbc_email import format_smbc_email
+
+            try:
+                format_smbc_email(email_config)
+            except EmailFetchError as exc:
+                skipped_sources.append('SMBC(メール通知)')
+                message = build_structure_error_message('SMBC(メール通知)', str(exc))
+                try:
+                    send_line_message(message, config)
+                except Exception as notify_exc:
+                    print(f"LINE通知に失敗しました（処理は継続します）: {notify_exc}")
 
     csv_paths = args.csv if args.csv else sorted(glob.glob(DEFAULT_FORMATTED_GLOB))
     if not csv_paths:

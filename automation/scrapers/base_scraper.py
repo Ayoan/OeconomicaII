@@ -104,12 +104,19 @@ class BaseScraper:
             driver.get(self.card_config['LOGIN_URL'])
             self._login(driver)
 
-            statement_url = self.card_config.get('STATEMENT_URL')
-            if statement_url:
-                # ログイン後にトップページ等へ遷移するサイト(例: e-navi)向け。
-                # 認証済みセッション内での同一ドメインへの直接遷移のため、
-                # メニュー展開等のクリック操作より壊れにくい
-                driver.get(statement_url)
+            menu_link_xpath = self.card_config.get('XPATH_STATEMENT_MENU_LINK')
+            if menu_link_xpath:
+                # SPA等、URL直接遷移だとセッション/ルーティング状態が
+                # 引き継がれずログイン画面に戻される実例があったサイト(例: SMBC)向け。
+                # メニューリンクをクリックして画面遷移する
+                self._click(driver, menu_link_xpath)
+            else:
+                statement_url = self.card_config.get('STATEMENT_URL')
+                if statement_url:
+                    # ログイン後にトップページ等へ遷移するサイト(例: e-navi)向け。
+                    # 認証済みセッション内での同一ドメインへの直接遷移のため、
+                    # メニュー展開等のクリック操作より壊れにくい
+                    driver.get(statement_url)
 
             self._download_all_statements(driver)
         finally:
@@ -205,9 +212,21 @@ class BaseScraper:
         raise LoginFailedError(element.text or 'ログインエラー表示を検知しました')
 
     def _fill(self, driver, xpath, value):
+        """入力欄に値を入力する
+
+        Akamai Bot Manager等、キー入力速度からボット判定を行うと疑われる
+        サイト向けに、TYPING_DELAY_SECONDS が設定されていれば1文字ずつ
+        人間の打鍵間隔を模して送信する（未設定時は従来通り一括送信）。
+        """
         element = self._find(driver, xpath)
         element.clear()
-        element.send_keys(value)
+        typing_delay = self.card_config.get('TYPING_DELAY_SECONDS', 0)
+        if typing_delay:
+            for char in value:
+                element.send_keys(char)
+                time.sleep(typing_delay)
+        else:
+            element.send_keys(value)
 
     def _click(self, driver, xpath):
         """要素をクリックする

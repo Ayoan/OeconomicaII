@@ -24,21 +24,18 @@
       "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']",
       "WAIT_TIMEOUT_SECONDS": 10,
       "DOWNLOAD_WAIT_SECONDS": 5
-    },
-    "SMBC": {
-      "LOGIN_URL": "https://...",
-      "USER_ID": "user_id_here",
-      "PASSWORD": "password_here",
-      "XPATH_USERNAME_INPUT": "//*[@id='...']",
-      "XPATH_PASSWORD_INPUT": "//*[@id='...']",
-      "XPATH_LOGIN_BUTTON": "//*[@id='...']",
-      "PRE_LOGIN_CLICK_DELAY_SECONDS": 3,
-      "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
-      "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']",
-      "XPATH_DOWNLOAD_BUTTON_ADDITIONAL": "//*[@id='...']",
-      "XPATH_MONTH_DROPDOWN": "//*[@id='...']",
-      "XPATH_MONTH_SEARCH_BUTTON": "//*[@id='...']",
-      "ADDITIONAL_MONTH_OFFSETS": [1]
+    }
+  },
+  "EMAIL_SOURCES": {
+    "SMBC_NOTIFICATION": {
+      "IMAP_HOST": "imap.gmail.com",
+      "IMAP_PORT": 993,
+      "EMAIL_ADDRESS": "your_gmail_address_here",
+      "APP_PASSWORD": "YOUR_GMAIL_APP_PASSWORD",
+      "MAILBOX": "INBOX",
+      "SENDER_FILTER": "statement@vpass.ne.jp",
+      "SUBJECT_FILTER": "ご利用のお知らせ【三井住友カード】",
+      "LOOKBACK_DAYS": 7
     }
   }
 }

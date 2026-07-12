@@ -288,6 +288,28 @@ def test_no_statement_url_does_not_navigate_again():
     assert driver.get.call_count == 1
 
 
+def test_statement_menu_link_clicks_instead_of_navigating():
+    """SPA等でURL直接遷移するとセッションが引き継がれずログイン画面に
+    戻される実例(SMBC)があったため、XPATH_STATEMENT_MENU_LINKが設定されて
+    いればSTATEMENT_URLへのdriver.get()ではなくクリックで遷移すること"""
+    config = dict(
+        CARD_CONFIG,
+        STATEMENT_URL='https://example.com/statement',
+        XPATH_STATEMENT_MENU_LINK='//a[@id="menu-statement"]',
+    )
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver)
+
+    scraper.download_csv()
+
+    # LOGIN_URLへのget()のみで、STATEMENT_URLへのget()は行われないこと
+    get_calls = [call.args[0] for call in driver.get.call_args_list]
+    assert get_calls == [config['LOGIN_URL']]
+
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert config['XPATH_STATEMENT_MENU_LINK'] in xpaths_used
+
+
 @patch('scrapers.base_scraper.time.sleep')
 def test_waits_after_each_download_click(mock_sleep):
     """ダウンロードクリック直後にdriver.quit()すると非同期ダウンロードが
@@ -312,6 +334,38 @@ def test_download_wait_seconds_is_configurable():
         scraper.download_csv()
 
     mock_sleep.assert_called_once_with(1)
+
+
+@patch('scrapers.base_scraper.time.sleep')
+def test_typing_delay_sends_keys_one_character_at_a_time(mock_sleep):
+    """Akamai Bot Manager等のキー入力速度によるボット判定を避けるため、
+    TYPING_DELAY_SECONDS設定時は1文字ずつsend_keysすること"""
+    config = dict(CARD_CONFIG, TYPING_DELAY_SECONDS=0.1)
+    username_element = _visible_element()
+
+    def find_element_side_effect(by, xpath):
+        if xpath == config['XPATH_USERNAME_INPUT']:
+            return username_element
+        return _visible_element()
+
+    driver = _make_driver(find_element_side_effect=find_element_side_effect)
+    scraper = BaseScraper(config, driver_factory=lambda: driver)
+
+    scraper.download_csv()
+
+    assert username_element.send_keys.call_args_list == [
+        ((char,),) for char in config['USER_ID']
+    ]
+    mock_sleep.assert_any_call(0.1)
+
+
+def test_no_typing_delay_sends_keys_at_once_by_default():
+    driver = _make_driver()
+    scraper = BaseScraper(CARD_CONFIG, driver_factory=lambda: driver)  # TYPING_DELAY_SECONDS未設定
+
+    scraper.download_csv()
+
+    driver.find_element.return_value.send_keys.assert_any_call(CARD_CONFIG['USER_ID'])
 
 
 def test_click_falls_back_to_javascript_when_intercepted():
