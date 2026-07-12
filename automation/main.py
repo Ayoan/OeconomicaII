@@ -151,6 +151,11 @@ def main():
 
         skipped_sources = run_all_scrapers(config, driver_factory=webdriver.Chrome)
 
+        if 'e-navi' not in skipped_sources and config.get('CREDIT_CARDS', {}).get('E_NAVI'):
+            from formatters.format_rakuten_csv import format_rakuten_csv
+
+            format_rakuten_csv()
+
     if args.email:
         email_config = config.get('EMAIL_SOURCES', {}).get('SMBC_NOTIFICATION')
         if email_config:

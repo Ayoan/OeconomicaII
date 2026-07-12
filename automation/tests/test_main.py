@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import notify_summary, register_records, run_pipeline  # noqa: E402
+from main import main, notify_summary, register_records, run_pipeline  # noqa: E402
 
 FIELDNAMES = ['日付', '収支区分', 'カテゴリ', '金額', 'メモ']
 
@@ -152,3 +152,40 @@ def test_notify_summary_sends_when_sources_skipped_even_if_zero_inserted(mock_se
 def test_notify_summary_does_not_raise_when_send_fails(mock_send):
     mock_send.side_effect = RuntimeError('network error')
     notify_summary({}, inserted=1, errors=[], skipped_sources=[])  # 例外が伝播しないこと
+
+
+@patch('formatters.format_rakuten_csv.format_rakuten_csv')
+@patch('scrapers.run_scrapers.run_all_scrapers')
+def test_main_scrape_formats_enavi_csv_after_successful_scraping(mock_run_scrapers, mock_format_rakuten, tmp_path, monkeypatch):
+    """--scrapeでe-naviの取得に成功した場合、ダウンロードしたCSVを整形CSVへ
+    変換するformat_rakuten_csv()が自動で呼ばれること
+    (ダウンロードして終わりでは main.py が拾う *_formatted.csv が生成されない不具合の再発防止)"""
+    mock_run_scrapers.return_value = []  # 失敗データソース無し = e-navi成功
+
+    config_path = tmp_path / 'config.json'
+    config_path.write_text(json.dumps({'CREDIT_CARDS': {'E_NAVI': {'LOGIN_URL': 'https://example.com'}}}))
+
+    monkeypatch.setattr(sys, 'argv', ['main.py', '--user-id', '1', '--scrape', '--config', str(config_path)])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_format_rakuten.assert_called_once()
+
+
+@patch('formatters.format_rakuten_csv.format_rakuten_csv')
+@patch('scrapers.run_scrapers.run_all_scrapers')
+def test_main_scrape_skips_formatting_when_enavi_fails(mock_run_scrapers, mock_format_rakuten, tmp_path, monkeypatch):
+    mock_run_scrapers.return_value = ['e-navi']  # e-navi取得失敗
+
+    config_path = tmp_path / 'config.json'
+    config_path.write_text(json.dumps({'CREDIT_CARDS': {'E_NAVI': {'LOGIN_URL': 'https://example.com'}}}))
+
+    monkeypatch.setattr(sys, 'argv', ['main.py', '--user-id', '1', '--scrape', '--config', str(config_path)])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_format_rakuten.assert_not_called()
