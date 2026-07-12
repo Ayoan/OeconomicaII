@@ -28,6 +28,8 @@
       "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
       "STATEMENT_URL": "https://...",
       "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']",
+      "XPATH_NEXT_MONTH_BUTTON": "//*[@id='...']",
+      "ADDITIONAL_MONTH_OFFSETS": [1],
       "WAIT_TIMEOUT_SECONDS": 10,
       "DOWNLOAD_WAIT_SECONDS": 5
     }

@@ -253,6 +253,92 @@ def test_month_dropdown_selection_failure_raises_structure_changed_error(mock_se
         assert e.xpath == MULTI_MONTH_CARD_CONFIG['XPATH_MONTH_DROPDOWN']
 
 
+NEXT_MONTH_BUTTON_CARD_CONFIG = dict(
+    CARD_CONFIG,
+    XPATH_NEXT_MONTH_BUTTON='//a[@id="next-month"]',
+    ADDITIONAL_MONTH_OFFSETS=[1],
+)
+
+
+def test_download_csv_with_next_month_button_clicks_and_downloads():
+    """e-naviが2026-07-12以降、支払い金額確定日(毎月12日)を境に当月分と
+    翌月以降分の表示が分離され、プルダウンではなく「次月」ボタンで画面遷移する
+    仕様に変わったことに対応する"""
+    driver = _make_driver()
+    scraper = BaseScraper(NEXT_MONTH_BUTTON_CARD_CONFIG, driver_factory=lambda: driver,
+                           today_func=lambda: date(2026, 7, 12))
+
+    scraper.download_csv()
+
+    # 次月ボタンのクリック1回につき、アクティブ判定用と_click内部の待機用の
+    # 2回find_elementが呼ばれる
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert xpaths_used.count(NEXT_MONTH_BUTTON_CARD_CONFIG['XPATH_NEXT_MONTH_BUTTON']) == 2
+    assert xpaths_used.count(NEXT_MONTH_BUTTON_CARD_CONFIG['XPATH_DOWNLOAD_BUTTON']) == 2
+
+
+def test_download_csv_with_next_month_button_uses_distinct_download_button():
+    config = dict(NEXT_MONTH_BUTTON_CARD_CONFIG, XPATH_DOWNLOAD_BUTTON_ADDITIONAL='//button[@id="download-next"]')
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver, today_func=lambda: date(2026, 7, 12))
+
+    scraper.download_csv()
+
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert xpaths_used.count(config['XPATH_DOWNLOAD_BUTTON']) == 1
+    assert xpaths_used.count(config['XPATH_DOWNLOAD_BUTTON_ADDITIONAL']) == 1
+
+
+def test_download_csv_with_next_month_button_clicks_multiple_times_for_further_offset():
+    """ADDITIONAL_MONTH_OFFSETSが[2]等、2ヶ月先の場合は次月ボタンを2回クリックすること"""
+    config = dict(NEXT_MONTH_BUTTON_CARD_CONFIG, ADDITIONAL_MONTH_OFFSETS=[2])
+    driver = _make_driver()
+    scraper = BaseScraper(config, driver_factory=lambda: driver, today_func=lambda: date(2026, 7, 12))
+
+    scraper.download_csv()
+
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert xpaths_used.count(config['XPATH_NEXT_MONTH_BUTTON']) == 4  # 2クリック x (判定+_click内部)
+
+
+def test_next_month_button_disabled_stops_without_error():
+    """支払い金額確定日(毎月12日)前など、まだ翌月分のデータが公開されておらず
+    「次月」ボタンが非アクティブ(class に disabled 系が付与される)な場合は、
+    StructureChangedErrorにせず静かに打ち切ること"""
+    disabled_button = _visible_element()
+    disabled_button.get_attribute.return_value = 'stmt-c-btn is-disabled'
+
+    def find_element_side_effect(by, xpath):
+        if xpath == NEXT_MONTH_BUTTON_CARD_CONFIG['XPATH_NEXT_MONTH_BUTTON']:
+            return disabled_button
+        return _visible_element()
+
+    driver = _make_driver(find_element_side_effect=find_element_side_effect)
+    scraper = BaseScraper(NEXT_MONTH_BUTTON_CARD_CONFIG, driver_factory=lambda: driver,
+                           today_func=lambda: date(2026, 7, 5))
+
+    scraper.download_csv()  # 例外が出ないこと
+
+    # デフォルト表示分のダウンロードのみ行われ、翌月分のダウンロードは行われないこと
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert xpaths_used.count(NEXT_MONTH_BUTTON_CARD_CONFIG['XPATH_DOWNLOAD_BUTTON']) == 1
+    disabled_button.click.assert_not_called()
+
+
+def test_month_dropdown_takes_priority_over_next_month_button_when_both_configured():
+    """両方設定された場合はプルダウン方式(XPATH_MONTH_DROPDOWN)を優先すること"""
+    config = dict(MULTI_MONTH_CARD_CONFIG, XPATH_NEXT_MONTH_BUTTON='//a[@id="next-month"]')
+    driver = _make_driver()
+
+    with patch('scrapers.base_scraper.Select'):
+        scraper = BaseScraper(config, driver_factory=lambda: driver, today_func=lambda: date(2026, 7, 11))
+        scraper.download_csv()
+
+    xpaths_used = [call.args[1] for call in driver.find_element.call_args_list]
+    assert config['XPATH_NEXT_MONTH_BUTTON'] not in xpaths_used
+    assert config['XPATH_MONTH_DROPDOWN'] in xpaths_used
+
+
 def test_no_additional_offsets_downloads_only_once():
     driver = _make_driver()
     scraper = BaseScraper(CARD_CONFIG, driver_factory=lambda: driver)  # ADDITIONAL_MONTH_OFFSETS未設定

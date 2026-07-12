@@ -19,14 +19,26 @@ XPATHの実値（config.json の CREDIT_CARDS.*）は各サイトの実際のDOM
 使うe-navi)」の両方に対応する。card_config に XPATH_NEXT_BUTTON が
 設定されていれば2段階方式として扱う。
 
-明細ダウンロードは「ログイン直後のデフォルト表示分」に加えて、
-「お支払い月」等のプルダウンで対象月を切り替えて複数回ダウンロードする
-サイト(例: SMBCカード。デフォルト表示は前月利用分の確定明細のみで、
-当月利用分のプレビュー明細を見るには翌月の支払い月を選択し直す必要がある)
-にも対応する。card_config に XPATH_MONTH_DROPDOWN /
-XPATH_MONTH_SEARCH_BUTTON / ADDITIONAL_MONTH_OFFSETS が設定されていれば、
-デフォルト表示分のダウンロード後、指定した支払い月ぶんだけ
-「プルダウン選択→照会→ダウンロード」を追加実行する。
+明細ダウンロードは「ログイン直後のデフォルト表示分」に加えて、対象月を
+切り替えて複数回ダウンロードするサイトにも対応する。月切替の方式は2種類:
+
+- プルダウン選択方式(例: SMBCカード。デフォルト表示は前月利用分の確定明細
+  のみで、当月利用分のプレビュー明細を見るには翌月の支払い月を選択し直す
+  必要がある): card_config に XPATH_MONTH_DROPDOWN / XPATH_MONTH_SEARCH_BUTTON
+  / ADDITIONAL_MONTH_OFFSETS が設定されていれば、デフォルト表示分の
+  ダウンロード後、指定した支払い月ぶんだけ「プルダウン選択→照会→ダウンロード」
+  を追加実行する。
+- 次月ボタン方式(例: e-navi。2026-07-12以降、支払い金額確定日(毎月12日)を
+  境に当月分と翌月以降分の表示が分離され、「次月」ボタンで画面遷移する
+  仕様に変わった): card_config に XPATH_NEXT_MONTH_BUTTON /
+  ADDITIONAL_MONTH_OFFSETS が設定されていれば、デフォルト表示分の
+  ダウンロード後、指定したオフセット月数ぶんだけ「次月ボタンクリック→
+  ダウンロード」を追加実行する。ADDITIONAL_MONTH_OFFSETS は昇順である前提で、
+  前回位置からの差分だけボタンを連続クリックして目的の月まで進める。
+
+XPATH_MONTH_DROPDOWN と XPATH_NEXT_MONTH_BUTTON の両方が設定されることは
+無い前提とし、両方指定された場合は XPATH_MONTH_DROPDOWN（プルダウン方式）
+を優先する。
 
 デフォルト表示画面と月切替後の画面とでダウンロードボタンのXPATHが異なる
 サイト（実際にSMBCカードで確認済み）にも対応するため、月切替後のダウンロードには
@@ -144,10 +156,45 @@ class BaseScraper:
         additional_download_xpath = self.card_config.get(
             'XPATH_DOWNLOAD_BUTTON_ADDITIONAL', self.card_config['XPATH_DOWNLOAD_BUTTON']
         )
-        for offset in additional_offsets:
-            self._select_statement_month(driver, offset)
-            self._click(driver, additional_download_xpath)
-            self._wait_for_download()
+
+        next_month_button_xpath = self.card_config.get('XPATH_NEXT_MONTH_BUTTON')
+        if self.card_config.get('XPATH_MONTH_DROPDOWN'):
+            for offset in additional_offsets:
+                self._select_statement_month(driver, offset)
+                self._click(driver, additional_download_xpath)
+                self._wait_for_download()
+        elif next_month_button_xpath:
+            current_offset = 0
+            for offset in additional_offsets:
+                for _ in range(offset - current_offset):
+                    if not self._next_month_button_active(driver, next_month_button_xpath):
+                        # まだ翌月分のデータが公開されていない等でボタンが
+                        # 非アクティブな場合は、エラーにはせずそこで打ち切る
+                        # （e-naviは支払い金額確定日(毎月12日)を境に翌月分の
+                        # 表示が有効になる仕様のため、日によっては非アクティブ）
+                        return
+                    self._click(driver, next_month_button_xpath)
+                current_offset = offset
+                self._click(driver, additional_download_xpath)
+                self._wait_for_download()
+
+    def _next_month_button_active(self, driver, xpath):
+        """「次月」ボタンがクリック可能な状態か判定する
+
+        e-naviの「次月」ボタンは <a> タグのため disabled 属性は使われず、
+        非アクティブ時は class にその旨が付与される（例: is-disabled）。
+        通常の `<button disabled>` も is_enabled() で判定できるよう
+        両方チェックする。要素自体が見つからない場合は StructureChangedError
+        の通常フローに委ねるため True を返す。
+        """
+        try:
+            element = driver.find_element(By.XPATH, xpath)
+        except Exception:
+            return True
+        class_attr = element.get_attribute('class') or ''
+        if 'disabled' in class_attr.lower():
+            return False
+        return element.is_enabled()
 
     def _wait_for_download(self):
         wait_seconds = self.card_config.get('DOWNLOAD_WAIT_SECONDS', DEFAULT_DOWNLOAD_WAIT_SECONDS)
