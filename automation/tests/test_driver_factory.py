@@ -85,6 +85,23 @@ def test_no_chromedriver_path_uses_default_service(mock_options_cls, mock_chrome
 
 @patch('scrapers.driver_factory.webdriver.Chrome')
 @patch('scrapers.driver_factory.webdriver.ChromeOptions')
+def test_page_load_strategy_is_eager(mock_options_cls, mock_chrome_cls):
+    """既定の'normal'(全リソースのロード完了を待つ)戦略だと、広告バナー等の
+    サードパーティリソースが読み込み完了せずdriver.get()がハングする実例が
+    あったため(e-navi、2026-07-12)、'eager'(DOM構築完了で制御を返す)に
+    変更すること"""
+    mock_options = MagicMock()
+    mock_options_cls.return_value = mock_options
+    mock_chrome_cls.return_value = MagicMock()
+
+    driver_factory = build_driver_factory()
+    driver_factory()
+
+    assert mock_options.page_load_strategy == 'eager'
+
+
+@patch('scrapers.driver_factory.webdriver.Chrome')
+@patch('scrapers.driver_factory.webdriver.ChromeOptions')
 def test_custom_download_dir_is_used(mock_options_cls, mock_chrome_cls):
     mock_options = MagicMock()
     mock_options_cls.return_value = mock_options

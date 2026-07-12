@@ -60,6 +60,11 @@ def build_driver_factory(scraper_config=None):
             options.add_argument('--headless=new')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        # 既定の'normal'(全リソースのロード完了を待つ)だと、広告バナー等の
+        # サードパーティ製リソースがなかなか読み込み完了せずdriver.get()が
+        # 数分単位でハングする実例があった(e-navi、2026-07-12)。DOM構築完了
+        # (interactive)時点で制御を返す'eager'に変更し、この種のハングを防ぐ
+        options.page_load_strategy = 'eager'
         options.add_experimental_option('excludeSwitches', ['enable-automation'])
         options.add_experimental_option('useAutomationExtension', False)
         options.add_argument('--disable-blink-features=AutomationControlled')
