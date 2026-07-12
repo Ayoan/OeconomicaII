@@ -54,6 +54,24 @@ def test_run_all_scrapers_continues_after_one_source_fails():
     assert 'e-navi' in message_arg
 
 
+def test_run_all_scrapers_catches_real_enavi_scraper_structure_changed_error():
+    """ENaviScraper/SMBCScraperは独自にsys.pathへ自身のディレクトリを追加し
+    base_scraperを裸のモジュール名でimportしていたため、run_scrapers.pyが
+    importする scrapers.base_scraper.ScraperError とクラスの実体が一致せず、
+    except ScraperError で捕捉できずに例外がmain()まで素通りする不具合が
+    本番環境の実機検証で発生した(2026-07-12)。モックを使わず実際のENaviScraper
+    経由でStructureChangedErrorを発生させ、正しく捕捉されることを確認する"""
+    driver = MagicMock()
+    driver.find_element.side_effect = Exception('no such element')
+
+    notify = MagicMock()
+    skipped = run_all_scrapers(CONFIG, driver_factory=lambda: driver, notify=notify)
+
+    assert 'e-navi' in skipped
+    assert 'SMBC' in skipped
+    assert notify.call_count == 2
+
+
 def test_run_all_scrapers_skips_source_without_config():
     config = {'LINE_BOT_CONFIG': CONFIG['LINE_BOT_CONFIG'], 'CREDIT_CARDS': {'E_NAVI': CONFIG['CREDIT_CARDS']['E_NAVI']}}
 
