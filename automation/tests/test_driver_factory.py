@@ -46,10 +46,41 @@ def test_custom_chrome_binary_is_set(mock_options_cls, mock_chrome_cls):
     mock_options_cls.return_value = mock_options
     mock_chrome_cls.return_value = MagicMock()
 
-    driver_factory = build_driver_factory({'CHROME_BINARY': '/snap/bin/chromium'})
+    driver_factory = build_driver_factory({'CHROME_BINARY': '/opt/google/chrome/chrome'})
     driver_factory()
 
-    assert mock_options.binary_location == '/snap/bin/chromium'
+    assert mock_options.binary_location == '/opt/google/chrome/chrome'
+
+
+@patch('scrapers.driver_factory.Service')
+@patch('scrapers.driver_factory.webdriver.Chrome')
+@patch('scrapers.driver_factory.webdriver.ChromeOptions')
+def test_chromedriver_path_builds_explicit_service(mock_options_cls, mock_chrome_cls, mock_service_cls):
+    """snap版chromedriverはAppArmor confinementによりGoogle Chrome公式deb版を
+    起動できない実例があったため、CHROMEDRIVER_PATH設定時はexecutable_pathを
+    明示したServiceを使うこと"""
+    mock_service = MagicMock()
+    mock_service_cls.return_value = mock_service
+    mock_chrome_cls.return_value = MagicMock()
+
+    driver_factory = build_driver_factory({'CHROMEDRIVER_PATH': '/home/naoya/bin/chromedriver-standalone'})
+    driver_factory()
+
+    mock_service_cls.assert_called_once_with(executable_path='/home/naoya/bin/chromedriver-standalone')
+    assert mock_chrome_cls.call_args.kwargs['service'] is mock_service
+
+
+@patch('scrapers.driver_factory.Service')
+@patch('scrapers.driver_factory.webdriver.Chrome')
+@patch('scrapers.driver_factory.webdriver.ChromeOptions')
+def test_no_chromedriver_path_uses_default_service(mock_options_cls, mock_chrome_cls, mock_service_cls):
+    mock_chrome_cls.return_value = MagicMock()
+
+    driver_factory = build_driver_factory()  # CHROMEDRIVER_PATH未設定
+    driver_factory()
+
+    mock_service_cls.assert_not_called()
+    assert mock_chrome_cls.call_args.kwargs['service'] is None
 
 
 @patch('scrapers.driver_factory.webdriver.Chrome')

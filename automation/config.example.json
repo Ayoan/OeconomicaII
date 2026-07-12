@@ -11,7 +11,8 @@
     "USER_ID": "YOUR_LINE_USER_ID"
   },
   "SCRAPER_CONFIG": {
-    "CHROME_BINARY": "/snap/bin/chromium",
+    "CHROME_BINARY": "/opt/google/chrome/chrome",
+    "CHROMEDRIVER_PATH": "/path/to/chromedriver-standalone",
     "DOWNLOAD_DIR": "/path/to/automation/formatters/datas",
     "HEADLESS": true
   },

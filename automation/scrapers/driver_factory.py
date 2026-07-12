@@ -1,12 +1,24 @@
 """
 本番実行(cron)向けChrome WebDriver生成
 
-ホームサーバーはディスプレイの無いヘッドレス環境で、かつChromiumがsnap版で
-導入されている（`google-chrome`という実行ファイル名ではない）ため、
+ホームサーバーはディスプレイの無いヘッドレス環境のため、
 `selenium.webdriver.Chrome()`をオプション無しでそのまま呼ぶだけでは動かない
-（バイナリパスが自動検出できない、ヘッドレス指定が無いとディスプレイ不在で
-起動に失敗する、ダウンロード先が `~/Downloads` 等になり `formatters/datas/`
-に配置されないため後続のFormatter層が拾えない）。
+（ヘッドレス指定が無いとディスプレイ不在で起動に失敗する、ダウンロード先が
+`~/Downloads` 等になり `formatters/datas/` に配置されないため後続の
+Formatter層が拾えない）。
+
+**snap版Chromium/chromedriverは使用しないこと（2026-07-12判明の既知の非互換）:**
+Ubuntu の `apt install chromium chromium-driver` はsnap版を導入するが、
+snap の AppArmor confinement により chromedriver からの `LaunchProcess` が
+`failed to execvp` で失敗し、セッションを作成できない。また `/usr/bin/chromedriver`
+はsnap版chromiumを起動する固定シェルスクリプトのラッパーであり、
+`CHROME_BINARY` で非snap版（Google Chrome公式deb等）を指定してもAppArmorに
+阻まれ `no chrome binary at ...` エラーになる。
+対策: Google Chrome公式debパッケージ（`https://dl.google.com/linux/direct/
+google-chrome-stable_current_amd64.deb`）と、Chrome for Testing配布の
+スタンドアロンchromedriverバイナリ（`https://googlechromelabs.github.io/
+chrome-for-testing/`）をChromeのバージョンに合わせて別途取得し、
+`CHROMEDRIVER_PATH` で明示的に指定すること。
 
 ローカル(Mac)での目視デバッグ時（実サイト検証手順書7章）は、この関数を経由せず
 呼び出し側でheadless=Falseの素朴なdriver_factoryを直接組み立てて使う想定。
@@ -15,6 +27,7 @@
 import os
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 
 DEFAULT_DOWNLOAD_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'formatters', 'datas'
@@ -26,7 +39,7 @@ def build_driver_factory(scraper_config=None):
 
     Args:
         scraper_config (dict | None): config.json の SCRAPER_CONFIG 相当の辞書
-            (CHROME_BINARY, DOWNLOAD_DIR, HEADLESS。全て任意)
+            (CHROME_BINARY, CHROMEDRIVER_PATH, DOWNLOAD_DIR, HEADLESS。全て任意)
             未設定時はヘッドレス・ダウンロード先 formatters/datas/ を既定値とする
             （cronでの無人実行を主眼としているため）。
 
@@ -35,6 +48,7 @@ def build_driver_factory(scraper_config=None):
     """
     scraper_config = scraper_config or {}
     chrome_binary = scraper_config.get('CHROME_BINARY')
+    chromedriver_path = scraper_config.get('CHROMEDRIVER_PATH')
     download_dir = scraper_config.get('DOWNLOAD_DIR', DEFAULT_DOWNLOAD_DIR)
     headless = scraper_config.get('HEADLESS', True)
 
@@ -58,7 +72,8 @@ def build_driver_factory(scraper_config=None):
         }
         options.add_experimental_option('prefs', prefs)
 
-        driver = webdriver.Chrome(options=options)
+        service = Service(executable_path=chromedriver_path) if chromedriver_path else None
+        driver = webdriver.Chrome(options=options, service=service)
         driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
             'source': 'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
         })
