@@ -13,6 +13,7 @@ import os
 from csv_formatter_common import (
     zenkaku_to_hankaku,
     convert_date_format_slash_to_hyphen,
+    parse_amount,
     write_formatted_csv,
     get_script_directory,
     get_today_date_string,
@@ -47,17 +48,28 @@ def format_rakuten_csv():
 
     # CSVファイルの読み込みと処理
     formatted_data = []
+    skipped_count = 0
 
     try:
         with open(input_file, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
 
             for row in reader:
+                # 外貨決済の明細行(利用日・利用金額が空欄で、利用店名・商品名に
+                # 為替レート補足が入る行)はスキップする
+                if not row['利用日'].strip():
+                    skipped_count += 1
+                    continue
+
+                is_valid, amount = parse_amount(row['利用金額'])
+                if not is_valid:
+                    skipped_count += 1
+                    continue
+
                 # データ整形
                 date = convert_date_format_slash_to_hyphen(row['利用日'])
                 memo = zenkaku_to_hankaku(row['利用店名・商品名'])
                 category = ''  # 空欄(作業者が入力)
-                amount = row['利用金額']
                 income_expense = '支出'
 
                 formatted_data.append({
@@ -77,6 +89,8 @@ def format_rakuten_csv():
     print(f"\n整形完了!")
     print(f"出力ファイル: {os.path.basename(output_file)}")
     print(f"処理件数: {len(formatted_data)}件")
+    if skipped_count > 0:
+        print(f"スキップ件数: {skipped_count}件 (外貨決済の補足行等)")
 
 
 if __name__ == '__main__':
