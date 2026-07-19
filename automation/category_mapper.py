@@ -26,6 +26,13 @@ def load_category_mapping(mapping_path):
 def resolve_category(memo, mapping):
     """メモの内容からキーワード一致でカテゴリを決定する
 
+    大文字小文字を区別しない部分一致（例: 'Notion'は'NOTION'/'NOTION LABS, INC.'
+    等の表記ゆれにも一致する）。ルールはリストの先頭から順に評価し、最初に
+    一致したものを採用する。「ジャンプ＋」（サブスク）が「ジャンプ」（書籍）を
+    部分文字列として含むようなケースがあるため、category_mapping.json 側で
+    より具体的なキーワードを先に、汎用的なキーワード（例: '定期:'）を
+    最後に並べる運用とする。
+
     Args:
         memo (str): メモ文字列（店舗名等）
         mapping (dict): load_category_mapping() の戻り値
@@ -33,8 +40,9 @@ def resolve_category(memo, mapping):
     Returns:
         str: 一致したカテゴリ。一致しなければ default_category
     """
+    memo_lower = memo.lower()
     for rule in mapping.get('text_contains_mappings', []):
-        if rule['keyword'] in memo:
+        if rule['keyword'].lower() in memo_lower:
             return rule['category']
     return mapping.get('default_category', '不明')
 

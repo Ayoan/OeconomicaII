@@ -1,8 +1,70 @@
 {
   "text_contains_mappings": [
     { "keyword": "京都生活協同組合", "category": "食費" },
+    { "keyword": "KYOTO CO-OP", "category": "食費" },
+    { "keyword": "阪急オアシス", "category": "食費" },
+    { "keyword": "イオンリテール", "category": "食費" },
+    { "keyword": "ラーメン", "category": "食費" },
+    { "keyword": "コーヒー豆", "category": "食費" },
+    { "keyword": "スタバ", "category": "食費" },
+    { "keyword": "プロテイン", "category": "食費" },
+    { "keyword": "ジェイアール京都伊勢丹", "category": "食費" },
+    { "keyword": "ライフ", "category": "食費" },
+    { "keyword": "セブン-イレブン", "category": "食費" },
+
+    { "keyword": "AMAZON DOWNLOADS", "category": "書籍" },
     { "keyword": "アマゾンチヨウ", "category": "書籍" },
-    { "keyword": "セブン-イレブン", "category": "日用品" }
+    { "keyword": "BOOTH", "category": "書籍" },
+
+    { "keyword": "利用場所:", "category": "交通費" },
+
+    { "keyword": "radiko", "category": "サブスク" },
+    { "keyword": "Apple One", "category": "サブスク" },
+    { "keyword": "AppleOne", "category": "サブスク" },
+    { "keyword": "Netflix", "category": "サブスク" },
+    { "keyword": "Youtube", "category": "サブスク" },
+    { "keyword": "朝日新聞", "category": "サブスク" },
+    { "keyword": "LAVA", "category": "サブスク" },
+    { "keyword": "ユニセフマンスリーサポート", "category": "サブスク" },
+    { "keyword": "Apple Music", "category": "サブスク" },
+    { "keyword": "APPLE COM BILL", "category": "サブスク" },
+    { "keyword": "Notion", "category": "サブスク" },
+    { "keyword": "NHK", "category": "サブスク" },
+    { "keyword": "S.N.O.W.S", "category": "サブスク" },
+    { "keyword": "ジャンプ＋", "category": "サブスク" },
+    { "keyword": "クラス", "category": "サブスク" },
+    { "keyword": "ANTHROPIC", "category": "サブスク" },
+
+    { "keyword": "J:COM", "category": "通信費" },
+    { "keyword": "JCOM", "category": "通信費" },
+    { "keyword": "LINEMO", "category": "通信費" },
+    { "keyword": "UQ mobile", "category": "通信費" },
+    { "keyword": "UQモバイル", "category": "通信費" },
+    { "keyword": "インターネット", "category": "通信費" },
+
+    { "keyword": "ガス電気代", "category": "水道光熱費" },
+    { "keyword": "電気ガス代", "category": "水道光熱費" },
+    { "keyword": "電気代", "category": "水道光熱費" },
+    { "keyword": "水道代", "category": "水道光熱費" },
+    { "keyword": "大阪ガス", "category": "水道光熱費" },
+
+    { "keyword": "ココカラファイン", "category": "日用品" },
+    { "keyword": "ダックス 二条店", "category": "日用品" },
+    { "keyword": "無印良品", "category": "日用品" },
+    { "keyword": "スギ薬局", "category": "日用品" },
+    { "keyword": "百均", "category": "日用品" },
+
+    { "keyword": "スマートEX", "category": "旅行" },
+    { "keyword": "新幹線", "category": "旅行" },
+    { "keyword": "東京ディズニーリゾート", "category": "旅行" },
+    { "keyword": "ジェイアール西日本", "category": "旅行" },
+    { "keyword": "お土産", "category": "旅行" },
+
+    { "keyword": "ユニクロ", "category": "衣服費" },
+
+    { "keyword": "TOHOシネマズ(ネット)", "category": "映画" },
+
+    { "keyword": "タイムズカー", "category": "車代" }
   ],
   "default_category": "不明"
 }
