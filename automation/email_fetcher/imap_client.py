@@ -25,6 +25,21 @@ class EmailFetchError(Exception):
     """IMAP接続・検索に失敗した場合の例外"""
 
 
+def _encode_mailbox_name(name):
+    """Gmailラベル名をIMAPの変更UTF-7（RFC 2060）へエンコードする
+
+    imaplibはmailbox名をASCIIとしてそのまま送信するため、日本語ラベル
+    （例: 'クレジットカード/楽天カード'）を含む階層ラベルは事前に
+    エンコードしないと `UnicodeEncodeError` になる。'/' は日本語Gmail
+    ラベルの階層区切りとして使われるため、セグメントごとに分けてから
+    変換する（'/'そのものをbase64エンコード対象に含めてしまうと壊れる）。
+    """
+    return '/'.join(
+        part.encode('utf-7').decode('ascii').replace('+', '&').replace('/', ',')
+        for part in name.split('/')
+    )
+
+
 def fetch_matching_emails(email_config):
     """条件に合致するメールを取得し、本文(プレーンテキスト)のリストを返す
 
@@ -34,7 +49,9 @@ def fetch_matching_emails(email_config):
              SENDER_FILTER, SUBJECT_FILTER, LOOKBACK_DAYS, MAILBOX(任意),
              SUBJECT_EXACT_MATCH(任意))
             MAILBOX省略時は 'INBOX'。Gmailのフィルタで特定ラベルに自動振分けされている
-            場合（例: 'VPASS'）は、そのラベル名を指定する。
+            場合（例: 'クレジットカード/VPASS'）は、そのラベル名を指定する。
+            階層ラベル（親ラベル/子ラベル）は '/' 区切りで指定する。日本語を含む
+            ラベル名も指定可能（内部でIMAP変更UTF-7へ自動エンコードする）。
             SUBJECT_EXACT_MATCH省略時はFalse（部分一致）。楽天カードの
             「カード利用のお知らせ(本人ご利用分)」のように、類似件名の別メール
             （「【速報版】カード利用のお知らせ(本人ご利用分)」等、詳細情報を含まない
@@ -58,7 +75,7 @@ def fetch_matching_emails(email_config):
 
     bodies = []
     try:
-        imap.select(email_config.get('MAILBOX', 'INBOX'))
+        imap.select(_encode_mailbox_name(email_config.get('MAILBOX', 'INBOX')))
         search_criteria = f'(FROM "{email_config["SENDER_FILTER"]}" SINCE {since_date})'
         status, data = imap.search(None, search_criteria)
         if status != 'OK':

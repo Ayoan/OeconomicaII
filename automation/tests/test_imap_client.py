@@ -94,6 +94,21 @@ def test_selects_inbox_by_default(mock_imap_ssl_cls):
 
 
 @patch('email_fetcher.imap_client.imaplib.IMAP4_SSL')
+def test_selects_nested_japanese_label_encoded_as_modified_utf7(mock_imap_ssl_cls):
+    """日本語の階層ラベル（例:「クレジットカード」配下の「楽天カード」）は
+    imaplibがASCIIとしてそのまま送信するため、事前にIMAP変更UTF-7へ
+    エンコードしないとUnicodeEncodeErrorになる(2026-07-19、実際にラベル構造を
+    「クレジットカード/VPASS」「クレジットカード/楽天カード」へ変更した際に発覚)"""
+    imap = _make_imap_mock([])
+    mock_imap_ssl_cls.return_value = imap
+    config = dict(EMAIL_CONFIG, MAILBOX='クレジットカード/楽天カード')
+
+    fetch_matching_emails(config)
+
+    imap.select.assert_called_once_with('&MK8w7DC4MMMwyDCrMPwwyQ-/&aX1ZKTCrMPwwyQ-')
+
+
+@patch('email_fetcher.imap_client.imaplib.IMAP4_SSL')
 def test_subject_exact_match_excludes_similarly_prefixed_subject(mock_imap_ssl_cls):
     """楽天カードの「カード利用のお知らせ(本人ご利用分)」と、部分一致してしまう
     「【速報版】カード利用のお知らせ(本人ご利用分)」（詳細情報を含まない速報版）
