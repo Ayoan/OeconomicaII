@@ -94,6 +94,38 @@ def test_selects_inbox_by_default(mock_imap_ssl_cls):
 
 
 @patch('email_fetcher.imap_client.imaplib.IMAP4_SSL')
+def test_subject_exact_match_excludes_similarly_prefixed_subject(mock_imap_ssl_cls):
+    """楽天カードの「カード利用のお知らせ(本人ご利用分)」と、部分一致してしまう
+    「【速報版】カード利用のお知らせ(本人ご利用分)」（詳細情報を含まない速報版）
+    を区別するため、SUBJECT_EXACT_MATCH指定時は完全一致のみ通すこと"""
+    exact = _build_plain_message('カード利用のお知らせ(本人ご利用分)', '確定版の本文')
+    prefixed = _build_plain_message('【速報版】カード利用のお知らせ(本人ご利用分)', '速報版の本文')
+
+    imap = _make_imap_mock([exact, prefixed])
+    mock_imap_ssl_cls.return_value = imap
+    config = dict(EMAIL_CONFIG, SUBJECT_FILTER='カード利用のお知らせ(本人ご利用分)', SUBJECT_EXACT_MATCH=True)
+
+    bodies = fetch_matching_emails(config)
+
+    assert len(bodies) == 1
+    assert '確定版の本文' in bodies[0]
+
+
+@patch('email_fetcher.imap_client.imaplib.IMAP4_SSL')
+def test_subject_filter_without_exact_match_allows_prefixed_subject(mock_imap_ssl_cls):
+    """SUBJECT_EXACT_MATCH省略時は従来通り部分一致（後方互換）"""
+    prefixed = _build_plain_message('【速報版】カード利用のお知らせ(本人ご利用分)', '速報版の本文')
+
+    imap = _make_imap_mock([prefixed])
+    mock_imap_ssl_cls.return_value = imap
+    config = dict(EMAIL_CONFIG, SUBJECT_FILTER='カード利用のお知らせ(本人ご利用分)')
+
+    bodies = fetch_matching_emails(config)
+
+    assert len(bodies) == 1
+
+
+@patch('email_fetcher.imap_client.imaplib.IMAP4_SSL')
 def test_login_failure_raises_email_fetch_error(mock_imap_ssl_cls):
     imap = MagicMock()
     imap.login.side_effect = Exception('auth failed')
@@ -122,6 +154,22 @@ def test_decode_subject_handles_mime_encoded_header():
 
 def test_decode_subject_handles_plain_ascii():
     assert _decode_subject('plain subject') == 'plain subject'
+
+
+def test_extract_plain_text_decodes_half_width_katakana_in_iso_2022_jp():
+    """標準のiso2022_jpコーデックは半角カナのエスケープ(ESC(I)をサポートせず
+    文字化けする(楽天カードの利用先が半角カナの店舗名の場合に実際に発生した)。
+    iso2022_jp_extへのフォールバックで正しくデコードできること"""
+    msg = MIMEText('', 'plain', 'iso-2022-jp')
+    # 半角カナ「ｸﾗｽ」を ESC(I エスケープシーケンスでエンコードしたペイロードに差し替える
+    raw_body = '利用先: ｸﾗｽ'.encode('iso2022_jp_ext')
+    del msg['Content-Transfer-Encoding']
+    msg.set_payload(raw_body.decode('latin-1'))
+    msg['Content-Transfer-Encoding'] = '8bit'
+
+    text = _extract_plain_text(msg)
+
+    assert 'ｸﾗｽ' in text
 
 
 def test_extract_plain_text_prefers_plain_over_html():

@@ -166,8 +166,13 @@ def main():
     parser.add_argument('--config', default=DEFAULT_CONFIG_PATH)
     parser.add_argument('--mapping', default=DEFAULT_MAPPING_PATH)
     parser.add_argument('--scrape', action='store_true', help='実行前にクレカサイトのスクレイピングを行う（要selenium・chromedriver）')
-    parser.add_argument('--email', action='store_true', help='実行前にSMBCカードのご利用通知メール（IMAP）を取得・整形する')
+    parser.add_argument('--email', action='store_true', help='実行前にカード利用通知メール（IMAP）を取得・整形する')
+    parser.add_argument('--email-source', choices=['SMBC_NOTIFICATION', 'RAKUTEN_NOTIFICATION'],
+                         help='--email 指定時にどの通知元(EMAIL_SOURCES のキー)を取得するか')
     args = parser.parse_args()
+
+    if args.email and not args.email_source:
+        parser.error('--email 指定時は --email-source が必須です')
 
     with open(args.config, 'r', encoding='utf-8') as f:
         config = json.load(f)
@@ -186,16 +191,22 @@ def main():
             format_rakuten_csv()
 
     if args.email:
-        email_config = config.get('EMAIL_SOURCES', {}).get('SMBC_NOTIFICATION')
+        email_config = config.get('EMAIL_SOURCES', {}).get(args.email_source)
         if email_config:
             from email_fetcher.imap_client import EmailFetchError
-            from formatters.format_smbc_email import format_smbc_email
+
+            if args.email_source == 'SMBC_NOTIFICATION':
+                from formatters.format_smbc_email import format_smbc_email as format_email
+                source_label = 'SMBC(メール通知)'
+            else:
+                from formatters.format_rakuten_email import format_rakuten_email as format_email
+                source_label = '楽天カード(メール通知)'
 
             try:
-                format_smbc_email(email_config)
+                format_email(email_config)
             except EmailFetchError as exc:
-                skipped_sources.append('SMBC(メール通知)')
-                message = build_structure_error_message('SMBC(メール通知)', str(exc))
+                skipped_sources.append(source_label)
+                message = build_structure_error_message(source_label, str(exc))
                 try:
                     send_line_message(message, config)
                 except Exception as notify_exc:

@@ -10,31 +10,6 @@
     "CHANNEL_ACCESS_TOKEN": "YOUR_LINE_ACCESS_TOKEN",
     "USER_ID": "YOUR_LINE_USER_ID"
   },
-  "SCRAPER_CONFIG": {
-    "CHROME_BINARY": "/opt/google/chrome/chrome",
-    "CHROMEDRIVER_PATH": "/path/to/chromedriver-standalone",
-    "DOWNLOAD_DIR": "/path/to/automation/formatters/datas",
-    "HEADLESS": true
-  },
-  "CREDIT_CARDS": {
-    "E_NAVI": {
-      "LOGIN_URL": "https://...",
-      "USER_ID": "user_id_here",
-      "PASSWORD": "password_here",
-      "XPATH_USERNAME_INPUT": "//*[@id='...']",
-      "XPATH_NEXT_BUTTON": "//*[@id='...']",
-      "XPATH_PASSWORD_INPUT": "//*[@id='...']",
-      "XPATH_LOGIN_BUTTON": "//*[@id='...']",
-      "XPATH_LOGIN_ERROR_INDICATOR": "//*[@id='...']",
-      "POST_PAGE_LOAD_DELAY_SECONDS": 2,
-      "STATEMENT_URL": "https://...",
-      "XPATH_DOWNLOAD_BUTTON": "//*[@id='...']",
-      "XPATH_NEXT_MONTH_BUTTON": "//*[@id='...']",
-      "ADDITIONAL_MONTH_OFFSETS": [1],
-      "WAIT_TIMEOUT_SECONDS": 10,
-      "DOWNLOAD_WAIT_SECONDS": 5
-    }
-  },
   "EMAIL_SOURCES": {
     "SMBC_NOTIFICATION": {
       "IMAP_HOST": "imap.gmail.com",
@@ -44,6 +19,17 @@
       "MAILBOX": "INBOX",
       "SENDER_FILTER": "statement@vpass.ne.jp",
       "SUBJECT_FILTER": "ご利用のお知らせ【三井住友カード】",
+      "LOOKBACK_DAYS": 7
+    },
+    "RAKUTEN_NOTIFICATION": {
+      "IMAP_HOST": "imap.gmail.com",
+      "IMAP_PORT": 993,
+      "EMAIL_ADDRESS": "your_gmail_address_here",
+      "APP_PASSWORD": "YOUR_GMAIL_APP_PASSWORD",
+      "MAILBOX": "INBOX",
+      "SENDER_FILTER": "info@mail.rakuten-card.co.jp",
+      "SUBJECT_FILTER": "カード利用のお知らせ(本人ご利用分)",
+      "SUBJECT_EXACT_MATCH": true,
       "LOOKBACK_DAYS": 7
     }
   }

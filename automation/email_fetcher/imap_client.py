@@ -1,10 +1,12 @@
 """
-Gmail IMAP経由でSMBCカードの利用通知メールを取得するモジュール
+Gmail IMAP経由でカード利用通知メールを取得する汎用モジュール
 
-VPASSの「ご利用通知サービス」で送信される支払い通知メール
-(送信元: statement@vpass.ne.jp)を検索・取得する。Seleniumスクレイピングは
-SMBC側のAkamai Bot Managerによるブロックで安定稼働しないと判断したため、
-SMBCカードの明細取得は本モジュール経由のメール通知方式に切り替えた
+VPASSの「ご利用通知サービス」（SMBCカード、送信元: statement@vpass.ne.jp）や
+楽天カードの「カード利用のお知らせ」（送信元: info@mail.rakuten-card.co.jp）等、
+複数のカード会社が送信する利用通知メールをIMAP経由で検索・取得する共通基盤。
+両カードともSeleniumスクレイピングが安定稼働しない（SMBC: Akamai Bot Manager
+によるブロック、e-navi: SPA初期化タイミング依存の断続的な失敗）と判断したため、
+本モジュール経由のメール通知方式に切り替えた
 (経緯: Docs/設計書_家計簿登録AI効率化_システム設計.md 9.5節参照)。
 
 同じメールを重複取得しても、DB側の重複排除(dedup.py)がfingerprintベースで
@@ -29,9 +31,15 @@ def fetch_matching_emails(email_config):
     Args:
         email_config (dict): config.json の EMAIL_SOURCES.<KEY> 相当の辞書
             (IMAP_HOST, IMAP_PORT, EMAIL_ADDRESS, APP_PASSWORD,
-             SENDER_FILTER, SUBJECT_FILTER, LOOKBACK_DAYS, MAILBOX(任意))
+             SENDER_FILTER, SUBJECT_FILTER, LOOKBACK_DAYS, MAILBOX(任意),
+             SUBJECT_EXACT_MATCH(任意))
             MAILBOX省略時は 'INBOX'。Gmailのフィルタで特定ラベルに自動振分けされている
             場合（例: 'VPASS'）は、そのラベル名を指定する。
+            SUBJECT_EXACT_MATCH省略時はFalse（部分一致）。楽天カードの
+            「カード利用のお知らせ(本人ご利用分)」のように、類似件名の別メール
+            （「【速報版】カード利用のお知らせ(本人ご利用分)」等、詳細情報を含まない
+            速報メール）が部分一致で誤って混入するケースでは、Trueを指定して
+            完全一致に限定する。
 
     Returns:
         list[str]: 条件に合致したメールの本文(プレーンテキスト)のリスト
@@ -57,6 +65,7 @@ def fetch_matching_emails(email_config):
             raise EmailFetchError(f"IMAP検索に失敗しました: {status}")
 
         subject_filter = email_config.get('SUBJECT_FILTER', '')
+        subject_exact_match = email_config.get('SUBJECT_EXACT_MATCH', False)
         for msg_id in data[0].split():
             status, msg_data = imap.fetch(msg_id, '(RFC822)')
             if status != 'OK':
@@ -64,8 +73,12 @@ def fetch_matching_emails(email_config):
             msg = email.message_from_bytes(msg_data[0][1])
 
             subject = _decode_subject(msg.get('Subject', ''))
-            if subject_filter and subject_filter not in subject:
-                continue
+            if subject_filter:
+                if subject_exact_match:
+                    if subject.strip() != subject_filter:
+                        continue
+                elif subject_filter not in subject:
+                    continue
 
             body = _extract_plain_text(msg)
             if body:
@@ -114,6 +127,12 @@ def _extract_plain_text(msg):
         return ''
 
     charset = target.get_content_charset() or 'utf-8'
+    if charset.lower().replace('_', '-') in ('iso-2022-jp',):
+        # 標準のiso2022_jpコーデックは半角カナのエスケープシーケンス(ESC(I)を
+        # サポートせずデコードエラー/文字化けになる(例: 楽天カードの利用先が
+        # 半角カナの店舗名の場合)。iso2022_jp_extは上位互換で半角カナも扱えるため
+        # iso-2022-jp宣言のメールは常にこちらでデコードする
+        charset = 'iso2022_jp_ext'
     text = payload.decode(charset, errors='replace')
 
     if target.get_content_type() == 'text/html':

@@ -8,6 +8,7 @@ CSV整形ツール共通モジュール
 import csv
 import os
 import re
+import unicodedata
 from datetime import datetime
 
 
@@ -16,14 +17,22 @@ OUTPUT_FIELDNAMES = ['日付', '収支区分', 'カテゴリ', '金額', 'メモ
 
 
 def zenkaku_to_hankaku(text):
-    """全角文字を半角文字に変換し、連続する半角スペースを一つにまとめる
+    """全角英数字・記号を半角に、半角カナを全角カナに変換し、
+    連続する半角スペースを一つにまとめる（店舗名表記のフォント統一）
+
+    半角カナはメールのISO-2022-JPエンコード等に由来し（楽天カード利用通知
+    メールで実際に確認）、他の登録経路（CSVインポート等）の全角カナ表記と
+    混在すると表示フォントが不揃いになるため、NFKC正規化で全角カナへ統一する。
+    NFKCは全角英数字・記号の半角化も兼ねるが、全角マイナス記号(U+2212)は
+    対象外のため後段の個別変換で拾う。
 
     Args:
         text (str): 変換対象の文字列
 
     Returns:
-        str: 半角に変換された文字列（連続スペースは一つに変換）
+        str: 正規化された文字列（連続スペースは一つに変換）
     """
+    text = unicodedata.normalize('NFKC', text)
     result = []
     for char in text:
         code = ord(char)

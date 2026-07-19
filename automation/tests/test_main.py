@@ -174,6 +174,65 @@ def test_main_scrape_formats_enavi_csv_after_successful_scraping(mock_run_scrape
     mock_format_rakuten.assert_called_once()
 
 
+@patch('formatters.format_smbc_email.format_smbc_email')
+def test_main_email_dispatches_to_smbc_formatter(mock_format_smbc, tmp_path, monkeypatch):
+    config_path = tmp_path / 'config.json'
+    config_path.write_text(json.dumps({'EMAIL_SOURCES': {'SMBC_NOTIFICATION': {'IMAP_HOST': 'x'}}}))
+
+    monkeypatch.setattr(sys, 'argv', [
+        'main.py', '--user-id', '3', '--email', '--email-source', 'SMBC_NOTIFICATION', '--config', str(config_path),
+    ])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_format_smbc.assert_called_once_with({'IMAP_HOST': 'x'})
+
+
+@patch('formatters.format_rakuten_email.format_rakuten_email')
+def test_main_email_dispatches_to_rakuten_formatter(mock_format_rakuten_email, tmp_path, monkeypatch):
+    config_path = tmp_path / 'config.json'
+    config_path.write_text(json.dumps({'EMAIL_SOURCES': {'RAKUTEN_NOTIFICATION': {'IMAP_HOST': 'y'}}}))
+
+    monkeypatch.setattr(sys, 'argv', [
+        'main.py', '--user-id', '2', '--email', '--email-source', 'RAKUTEN_NOTIFICATION',
+        '--config', str(config_path),
+    ])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [])
+    monkeypatch.setattr('main.notify_summary', lambda *a, **k: None)
+
+    main()
+
+    mock_format_rakuten_email.assert_called_once_with({'IMAP_HOST': 'y'})
+
+
+@patch('main.send_line_message')
+@patch('formatters.format_rakuten_email.format_rakuten_email')
+def test_main_email_notifies_and_skips_source_on_fetch_error(mock_format_rakuten_email, mock_send, tmp_path,
+                                                                monkeypatch):
+    from email_fetcher.imap_client import EmailFetchError
+
+    mock_format_rakuten_email.side_effect = EmailFetchError('IMAP接続に失敗しました')
+
+    config_path = tmp_path / 'config.json'
+    config_path.write_text(json.dumps({'EMAIL_SOURCES': {'RAKUTEN_NOTIFICATION': {'IMAP_HOST': 'y'}}}))
+
+    monkeypatch.setattr(sys, 'argv', [
+        'main.py', '--user-id', '2', '--email', '--email-source', 'RAKUTEN_NOTIFICATION',
+        '--config', str(config_path),
+    ])
+    monkeypatch.setattr('main.glob.glob', lambda pattern: [])
+    captured = {}
+    monkeypatch.setattr('main.notify_summary', lambda config, inserted, errors, skipped_sources=None:
+                         captured.update(skipped_sources=skipped_sources))
+
+    main()
+
+    assert captured['skipped_sources'] == ['楽天カード(メール通知)']
+    mock_send.assert_called_once()
+
+
 def test_archive_processed_csv_moves_files_with_user_id_suffix(tmp_path):
     processed_dir = tmp_path / 'processed'
     csv_path = tmp_path / 'enavi_20260712_formatted.csv'
