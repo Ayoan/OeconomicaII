@@ -63,6 +63,19 @@ def test_balance_ja_and_en_normalize_to_same_fingerprint():
     assert generate_fingerprint(USER_ID, csv_record) == generate_fingerprint(USER_ID, db_record)
 
 
+def test_category_difference_does_not_break_fingerprint_match():
+    """カテゴリはfingerprintに含めないこと。ユーザーがDB登録後にアプリ上で
+    カテゴリを手動修正した直後に同じ取引が再取得された場合でも重複登録に
+    ならないようにするため(2026-07-19、e-naviのメール通知方式切替時に
+    実際に発生した重複登録の再発防止)"""
+    db_record = make_record(category='不明')
+    new_record = make_record(category='食費')
+    assert generate_fingerprint(USER_ID, db_record) == generate_fingerprint(USER_ID, new_record)
+
+    result = dedup_against_db([new_record], [db_record], USER_ID)
+    assert result == []
+
+
 def test_get_date_range_returns_min_max():
     records = [make_record(date='2026-07-05'), make_record(date='2026-07-10'), make_record(date='2026-07-01')]
     assert get_date_range(records) == ('2026-07-01', '2026-07-10')

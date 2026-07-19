@@ -51,21 +51,27 @@ def _get(record, *keys):
 def generate_fingerprint(user_id, record):
     """レコードのフィンガープリント(SHA256)を生成する
 
+    カテゴリは含めない。カテゴリはDB登録後にユーザーがアプリ上で手動修正する
+    運用（「不明」カテゴリの修正等）が前提であり、fingerprintに含めると
+    ユーザーが再分類した直後の再取得（特にメール通知方式はUID等の既読管理を
+    持たず毎回LOOKBACK_DAYS分を再取得する設計のため）で同一取引が「新規」と
+    誤判定され、重複登録される実害が発生した（2026-07-19、e-navi）。
+
     Args:
         user_id: ユーザーID
         record (dict): 共通スキーマ('日付','収支区分','カテゴリ','金額','メモ')
             またはDBスキーマ('date','balance','category','amount','memo')のレコード
+            （'カテゴリ'/'category'キー自体はfingerprintの算出には使わない）
 
     Returns:
         str: SHA256ハッシュ値(hex文字列)
     """
     date = _get(record, '日付', 'date')
     balance = _normalize_balance(_get(record, '収支区分', 'balance'))
-    category = _get(record, 'カテゴリ', 'category')
     amount = int(_get(record, '金額', 'amount'))
     memo = normalize_memo(_get(record, 'メモ', 'memo'))
 
-    key = '|'.join([str(user_id), str(date), str(balance), str(category), str(amount), memo])
+    key = '|'.join([str(user_id), str(date), str(balance), str(amount), memo])
     return hashlib.sha256(key.encode('utf-8')).hexdigest()
 
 
