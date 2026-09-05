@@ -1340,7 +1340,6 @@
         })
         .then(result => {
             if (result.success) {
-                alert(result.message);
                 closeEditModal();
                 location.reload(); // ページを再読み込みして最新データを表示
             } else {
