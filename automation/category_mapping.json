@@ -11,6 +11,7 @@
     { "keyword": "ジェイアール京都伊勢丹", "category": "食費" },
     { "keyword": "ライフ", "category": "食費" },
     { "keyword": "セブン-イレブン", "category": "食費" },
+    { "keyword": "マツヤ", "category": "食費" },
 
     { "keyword": "AMAZON DOWNLOADS", "category": "書籍" },
     { "keyword": "アマゾンチヨウ", "category": "書籍" },
@@ -34,6 +35,7 @@
     { "keyword": "ジャンプ＋", "category": "サブスク" },
     { "keyword": "クラス", "category": "サブスク" },
     { "keyword": "ANTHROPIC", "category": "サブスク" },
+    { "keyword": "カブシキガイシヤル-プ", "category": "サブスク" },
 
     { "keyword": "J:COM", "category": "通信費" },
     { "keyword": "JCOM", "category": "通信費" },
@@ -61,6 +63,8 @@
     { "keyword": "お土産", "category": "旅行" },
 
     { "keyword": "ユニクロ", "category": "衣服費" },
+
+    { "keyword": "kurukuruM", "category": "美容費" },
 
     { "keyword": "TOHOシネマズ(ネット)", "category": "映画" },
 
