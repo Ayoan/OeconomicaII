@@ -11,21 +11,34 @@ CONFIG = {'LINE_BOT_CONFIG': {'CHANNEL_ACCESS_TOKEN': 'dummy-token', 'USER_ID': 
 
 def test_build_summary_message_no_errors():
     message = build_summary_message(inserted=5, errors=[])
-    assert '新規登録: 5件' in message
-    assert 'エラーなし' in message
+    assert '5件' in message
+    assert 'エラーもなくて' in message
+
+
+def test_build_summary_message_zero_inserted_no_errors():
+    message = build_summary_message(inserted=0, errors=[])
+    assert '新しいお支払いはなかった' in message
 
 
 def test_build_summary_message_with_errors_and_skipped_sources():
     message = build_summary_message(inserted=3, errors=['err1', 'err2'], skipped_sources=['e-navi'])
-    assert '新規登録: 3件' in message
-    assert 'エラー: 2件' in message
+    assert '3件' in message
+    assert '2件' in message
     assert 'e-navi' in message
+
+
+def test_build_summary_message_is_pom_pom_purin_toned():
+    """LINE Botのアイコンがポムポムプリンのため、メッセージも一人称「ぼく」視点の
+    プリン口調で統一していること(Docs/ポムポムプリン口調.md参照)"""
+    message = build_summary_message(inserted=1, errors=[])
+    assert 'プリン' in message
 
 
 def test_build_structure_error_message_includes_source_and_detail():
     message = build_structure_error_message('SMBC', '要素が見つかりません: //*[@id=\'x\']')
     assert 'SMBC' in message
     assert "//*[@id='x']" in message
+    assert 'プリン' in message
 
 
 def test_send_line_message_posts_with_bearer_token_and_payload():

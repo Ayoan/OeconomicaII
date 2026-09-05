@@ -38,6 +38,10 @@ def send_line_message(message, config, session=requests):
 def build_summary_message(inserted, errors, skipped_sources=None):
     """パイプライン実行結果からLINE通知用のサマリメッセージを組み立てる
 
+    通知BotのLINEアイコンがポムポムプリンのため、メッセージの文面もプリンが
+    喋っている口調（一人称「ぼく」、柔らかい語尾、のんびりした雰囲気）で
+    統一している（Docs/ポムポムプリン口調.md 参照）。
+
     Args:
         inserted (int): 新規登録件数
         errors (list[str]): バリデーションエラーメッセージ群
@@ -46,18 +50,33 @@ def build_summary_message(inserted, errors, skipped_sources=None):
     Returns:
         str
     """
-    lines = ['【家計簿自動登録】実行結果', f'新規登録: {inserted}件']
+    lines = ['🍮 プリンだよ、今日のお仕事の報告だよ〜']
+
+    if inserted > 0:
+        lines.append(f'カードのお支払いを{inserted}件見つけて、家計簿にちゃんと書いておいたよ！')
+    elif not skipped_sources:
+        # 取得自体は成功した上で新規0件（＝本当に新しい支払いが無かった）場合のみ
+        # 「お昼寝」の表現を使う。取得失敗時に紛らわしくなるのを避けるため区別する。
+        lines.append('今日は新しいお支払いはなかったみたい。のんびりお昼寝できたよ〜。')
+
     if errors:
-        lines.append(f'不明カテゴリ等のエラー: {len(errors)}件')
+        lines.append(f'ただ、{len(errors)}件だけカテゴリがよくわからなくて「不明」のままにしちゃったんだ。あとで見てくれると嬉しいな。')
+
     if skipped_sources:
-        lines.append(f'取得失敗のためスキップ: {", ".join(skipped_sources)}')
+        sources = '、'.join(skipped_sources)
+        lines.append(f'{sources}のお知らせがうまく受け取れなくて、お休みしちゃったよ。ごめんね、確認してもらえるかな？')
+
     if not errors and not skipped_sources:
-        lines.append('エラーなし')
+        lines.append('エラーもなくて、今日ものんびり平和な一日だったよ♪')
+
     return '\n'.join(lines)
 
 
 def build_structure_error_message(source_name, detail):
-    """スクレイピング失敗時のエラー通知メッセージを組み立てる
+    """明細取得失敗時のエラー通知メッセージを組み立てる
+
+    スクレイピング失敗（HTML構造変化）・メール取得失敗（IMAP接続エラー）の
+    両方から呼び出される想定のため、原因箇所を限定しない書き方にしている。
 
     Args:
         source_name (str): 失敗したデータソース名（例: 'e-navi'）
@@ -67,8 +86,8 @@ def build_structure_error_message(source_name, detail):
         str
     """
     return (
-        f'【家計簿自動登録】{source_name} の明細取得に失敗しました\n'
-        f'原因: {detail}\n'
-        'サイトのHTML構造が変わった可能性があります。'
-        'config.json の対象XPATH値を確認・修正してください。'
+        '🍮 プリンだよ、ちょっと困ったことがあったんだ…\n'
+        f'{source_name}の明細がうまく取れなかったよ。\n'
+        f'理由: {detail}\n'
+        'サイトかメールの形が変わっちゃったのかもしれないから、確認してもらえると嬉しいな。'
     )

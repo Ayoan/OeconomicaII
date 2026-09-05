@@ -1,0 +1,5 @@
+{
+  "text_contains_exclusions": [
+    { "keyword": "楽天証券投信積立0.5%", "reason": "NISA積立への振替であり支出ではないため" }
+  ]
+}

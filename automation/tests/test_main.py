@@ -59,6 +59,72 @@ def test_run_pipeline_excludes_db_duplicates_and_fills_category(tmp_path):
     assert to_insert[0]['カテゴリ'] == '不明'
 
 
+def test_run_pipeline_excludes_records_matching_exclusion_mapping(tmp_path):
+    """NISA積立等、exclusion_mapping.jsonのキーワードに一致するメモは
+    カテゴリ補完・重複排除の対象にすら含めず、家計簿登録から除外すること"""
+    csv_path = tmp_path / 'enavi_20260720_formatted.csv'
+    _write_formatted_csv(csv_path, [
+        {'日付': '2026-07-10', '収支区分': '支出', 'カテゴリ': '', '金額': '50000', 'メモ': '楽天証券投信積立0.5%~'},
+        {'日付': '2026-07-11', '収支区分': '支出', 'カテゴリ': '', '金額': '1200', 'メモ': '謎の店舗'},
+    ])
+    config_path = tmp_path / 'config.json'
+    _write_config(config_path)
+    mapping_path = tmp_path / 'category_mapping.json'
+    _write_mapping(mapping_path)
+    exclusion_path = tmp_path / 'exclusion_mapping.json'
+    exclusion_path.write_text(json.dumps({
+        'text_contains_exclusions': [{'keyword': '楽天証券投信積立0.5%', 'reason': 'test'}],
+    }))
+
+    def fake_fetch_existing(user_id, start_date, end_date):
+        return []
+
+    to_insert = run_pipeline(
+        user_id=1,
+        csv_paths=[str(csv_path)],
+        config_path=str(config_path),
+        mapping_path=str(mapping_path),
+        exclusion_mapping_path=str(exclusion_path),
+        fetch_existing=fake_fetch_existing,
+    )
+
+    assert len(to_insert) == 1
+    assert to_insert[0]['メモ'] == '謎の店舗'
+
+
+def test_run_pipeline_returns_empty_list_when_all_records_excluded(tmp_path):
+    csv_path = tmp_path / 'enavi_20260720_formatted.csv'
+    _write_formatted_csv(csv_path, [
+        {'日付': '2026-07-10', '収支区分': '支出', 'カテゴリ': '', '金額': '50000', 'メモ': '楽天証券投信積立0.5%~'},
+    ])
+    config_path = tmp_path / 'config.json'
+    _write_config(config_path)
+    mapping_path = tmp_path / 'category_mapping.json'
+    _write_mapping(mapping_path)
+    exclusion_path = tmp_path / 'exclusion_mapping.json'
+    exclusion_path.write_text(json.dumps({
+        'text_contains_exclusions': [{'keyword': '楽天証券投信積立0.5%', 'reason': 'test'}],
+    }))
+
+    called = []
+
+    def fake_fetch_existing(user_id, start_date, end_date):
+        called.append(True)
+        return []
+
+    to_insert = run_pipeline(
+        user_id=1,
+        csv_paths=[str(csv_path)],
+        config_path=str(config_path),
+        mapping_path=str(mapping_path),
+        exclusion_mapping_path=str(exclusion_path),
+        fetch_existing=fake_fetch_existing,
+    )
+
+    assert to_insert == []
+    assert called == []  # 除外で0件になった時点でDB照会自体を行わないこと
+
+
 def test_run_pipeline_returns_empty_list_when_no_records(tmp_path):
     csv_path = tmp_path / 'empty_formatted.csv'
     _write_formatted_csv(csv_path, [])

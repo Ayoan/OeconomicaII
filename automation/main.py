@@ -4,9 +4,10 @@
 
 (任意で)クレカサイトのスクレイピング(scrapers/*.py)で明細CSVを取得したうえで、
 Formatter層(formatters/*.py)が出力済みの整形CSV(*_formatted.csv)を読み込み、
-カテゴリ自動補完(category_mapper.py) → DB既存データとの重複排除(dedup.py) →
-バリデーション(validation.py) → DB登録(db.repository.insert_records、プランA)
-を行い、最終結果をLINE Botへ通知する(notify/line_bot.py)。
+除外フィルタ(exclusion_filter.py) → カテゴリ自動補完(category_mapper.py) →
+DB既存データとの重複排除(dedup.py) → バリデーション(validation.py) →
+DB登録(db.repository.insert_records、プランA)を行い、最終結果をLINE Botへ
+通知する(notify/line_bot.py)。
 """
 
 import argparse
@@ -19,6 +20,7 @@ from datetime import datetime
 
 from category_mapper import apply_category_mapping, load_category_mapping
 from dedup import dedup_against_db, get_date_range
+from exclusion_filter import filter_excluded_records, load_exclusion_mapping
 from db.repository import (
     ensure_category_exists,
     fetch_existing_records,
@@ -31,6 +33,7 @@ from validation import BALANCE_JA_TO_TYPE, validate_records
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, 'config.json')
 DEFAULT_MAPPING_PATH = os.path.join(SCRIPT_DIR, 'category_mapping.json')
+DEFAULT_EXCLUSION_MAPPING_PATH = os.path.join(SCRIPT_DIR, 'exclusion_mapping.json')
 DEFAULT_FORMATTED_GLOB = os.path.join(SCRIPT_DIR, 'formatters', 'datas', '*_formatted.csv')
 PROCESSED_DIR = os.path.join(SCRIPT_DIR, 'formatters', 'datas', 'processed')
 
@@ -79,7 +82,7 @@ def load_formatted_records(csv_paths):
 
 
 def run_pipeline(user_id, csv_paths, config_path=DEFAULT_CONFIG_PATH, mapping_path=DEFAULT_MAPPING_PATH,
-                  fetch_existing=fetch_existing_records):
+                  exclusion_mapping_path=DEFAULT_EXCLUSION_MAPPING_PATH, fetch_existing=fetch_existing_records):
     """整形済みCSVの読み込みからDB重複排除までの一連の処理を実行する
 
     Args:
@@ -87,6 +90,7 @@ def run_pipeline(user_id, csv_paths, config_path=DEFAULT_CONFIG_PATH, mapping_pa
         csv_paths (list[str]): 整形済みCSVファイルパスのリスト
         config_path (str): config.json のパス
         mapping_path (str): category_mapping.json のパス
+        exclusion_mapping_path (str): exclusion_mapping.json のパス
         fetch_existing: DB照会関数（テスト時にモックを注入するためのフック）
 
     Returns:
@@ -97,6 +101,11 @@ def run_pipeline(user_id, csv_paths, config_path=DEFAULT_CONFIG_PATH, mapping_pa
     lookback_days = config.get('DEDUP_CONFIG', {}).get('LOOKBACK_DAYS', 14)
 
     records = load_formatted_records(csv_paths)
+    if not records:
+        return []
+
+    exclusion_mapping = load_exclusion_mapping(exclusion_mapping_path)
+    records = filter_excluded_records(records, exclusion_mapping)
     if not records:
         return []
 
@@ -165,6 +174,7 @@ def main():
     parser.add_argument('--csv', nargs='*', help='整形済みCSVファイルパス（省略時は formatters/datas/*_formatted.csv を自動検出）')
     parser.add_argument('--config', default=DEFAULT_CONFIG_PATH)
     parser.add_argument('--mapping', default=DEFAULT_MAPPING_PATH)
+    parser.add_argument('--exclusion-mapping', default=DEFAULT_EXCLUSION_MAPPING_PATH)
     parser.add_argument('--scrape', action='store_true', help='実行前にクレカサイトのスクレイピングを行う（要selenium・chromedriver）')
     parser.add_argument('--email', action='store_true', help='実行前にカード利用通知メール（IMAP）を取得・整形する')
     parser.add_argument('--email-source', choices=['SMBC_NOTIFICATION', 'RAKUTEN_NOTIFICATION'],
@@ -219,7 +229,7 @@ def main():
         notify_summary(config, inserted=0, errors=[], skipped_sources=skipped_sources)
         return
 
-    to_insert = run_pipeline(args.user_id, csv_paths, args.config, args.mapping)
+    to_insert = run_pipeline(args.user_id, csv_paths, args.config, args.mapping, args.exclusion_mapping)
     result = register_records(args.user_id, to_insert)
 
     print(f"新規登録: {result['inserted']}件")
