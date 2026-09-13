@@ -12,6 +12,7 @@
     { "keyword": "ライフ", "category": "食費" },
     { "keyword": "セブン-イレブン", "category": "食費" },
     { "keyword": "マツヤ", "category": "食費" },
+    { "keyword": "志津屋", "category": "食費" },
 
     { "keyword": "AMAZON DOWNLOADS", "category": "書籍" },
     { "keyword": "アマゾンチヨウ", "category": "書籍" },
@@ -68,7 +69,9 @@
 
     { "keyword": "TOHOシネマズ(ネット)", "category": "映画" },
 
-    { "keyword": "タイムズカー", "category": "車代" }
+    { "keyword": "タイムズカー", "category": "車代" },
+
+    { "keyword": "病院", "category": "医療費" }
   ],
   "default_category": "不明"
 }
