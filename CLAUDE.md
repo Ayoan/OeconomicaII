@@ -14,6 +14,8 @@ AIエージェントがこのリポジトリで作業するための包括的な
 - **phpMyAdmin**: http://localhost:18080
 - **コンテナ名**: `Oeconomica_app`（PHP）、`Oeconomica_nginx`、`Oeconomica_db`
 
+**関連システム**: このリポジトリには家計簿登録自動化パイプライン（`automation/`、Python）も同居している。カード明細の自動取得・登録・LINE通知を担う別システムで、本番ではcron運用中。詳細は `automation/` 配下ではなく `03_Home_Server/家計簿登録_AI効率化/CLAUDE.md`（Vault側）が起点。本ファイルはLaravel本体（`src/`）のみを対象とする。
+
 ---
 
 ## 2. 技術スタック
@@ -200,6 +202,13 @@ DELETE /budgets/delete/{id}         → 予算削除
 ### Ajax vs フォーム送信
 多くのエンドポイントは `$request->expectsJson()` で分岐し、
 Ajax（JSON）とフォーム送信（リダイレクト）の両方に対応している。
+
+### 収支データ更新（input.blade.php）の成功時通知
+`updateOeconomica()`（Ajax更新）は成功時に `alert()` を出さない方針（2026-09-05変更）。
+モーダルを閉じて `location.reload()` するだけで結果は一覧に反映されるため、
+「更新完了」のアラート→OKクリックという二度手間をなくした。エラー時（`result.error`・
+通信エラー）のアラートは維持している。削除（`deleteOeconomica()`）は確認ダイアログ
+（`confirm()`）を伴う意図的な操作のため、完了アラートはあえて残す方針（ユーザー判断）。
 
 ### カテゴリ参照
 `oeconomicas` テーブルの `category` カラムはカテゴリ名文字列を直接保存（FK なし）。

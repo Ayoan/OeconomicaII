@@ -13,12 +13,14 @@
     { "keyword": "セブン-イレブン", "category": "食費" },
     { "keyword": "マツヤ", "category": "食費" },
     { "keyword": "志津屋", "category": "食費" },
+    { "keyword": "GR OIKE", "category": "食費" },
 
     { "keyword": "AMAZON DOWNLOADS", "category": "書籍" },
     { "keyword": "アマゾンチヨウ", "category": "書籍" },
     { "keyword": "BOOTH", "category": "書籍" },
 
     { "keyword": "利用場所:", "category": "交通費" },
+    { "keyword": "プライベ-スザセキヨヤクサイ", "category": "交通費" }, 
 
     { "keyword": "radiko", "category": "サブスク" },
     { "keyword": "Apple One", "category": "サブスク" },
@@ -66,10 +68,12 @@
     { "keyword": "ユニクロ", "category": "衣服費" },
 
     { "keyword": "kurukuruM", "category": "美容費" },
+    { "keyword": "クルクルエム", "category": "美容費" },
 
     { "keyword": "TOHOシネマズ(ネット)", "category": "映画" },
 
     { "keyword": "タイムズカー", "category": "車代" },
+    { "keyword": "NIPPONRENT-A-CAR", "category": "車代" },
 
     { "keyword": "病院", "category": "医療費" }
   ],
